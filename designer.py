@@ -10,12 +10,10 @@ from PIL import ImageGrab, Image
 from operator import itemgetter
 import numpy as np
 import hitherdither
+import os
 
 # TODO https://github.com/hbldh/hitherdither
-# TODO de numpy Pillow img resize modus optie toevoegen aan de ui
-# TODO floyd te vervangen met dit: https://bisqwit.iki.fi/story/howto/dither/jy/
 # TODO check of afbeelding bestaat
-# TODO resize de window gebaseerd op de breedte van de inner vboxlayout
 # TODO maak color pallete preview of een grid of geef het een scrollbar
 # TODO scaling en dither menu toepassen en verbinden
 # TODO transparantie toevoegen
@@ -100,7 +98,7 @@ class img_file():
 
 
 class FloatingPreview(QtWidgets.QWidget):
-    def __init__(self, input_img: img_file):
+    def __init__(self, input_img: img_file, opacity: int):
         super().__init__()
 
         self.setWindowFlag(QtCore.Qt.FramelessWindowHint, True)
@@ -124,15 +122,21 @@ class FloatingPreview(QtWidgets.QWidget):
         self.dragPos = QtCore.QPoint()
         self.m_label.mouseMoveEvent = self.mouseMoveEvent
 
+        self.change_opacity(opacity)
+
         lay = QtWidgets.QVBoxLayout(self)
         # lay.addWidget(self.m_slider)
         lay.addWidget(self.m_label)
 
     def change_opacity(self, opacity):
+        self.opacity = opacity * 0.01
+        self.__update_opacity()
+
+    def __update_opacity(self):
         new_pix = QtGui.QPixmap(self.m_original_input_image.qpix_scaled.size())
         new_pix.fill(QtCore.Qt.transparent)
         painter = QtGui.QPainter(new_pix)
-        painter.setOpacity(opacity * 0.01)
+        painter.setOpacity(self.opacity)
         painter.drawPixmap(QtCore.QPoint(),
                            self.m_original_input_image.qpix_scaled)
         painter.end()
@@ -148,7 +152,8 @@ class FloatingPreview(QtWidgets.QWidget):
         self.dragPos = event.globalPos()
 
     def update_image(self):
-        self.m_label.setPixmap(self.m_original_input_image.qpix_scaled)
+        # self.m_label.setPixmap(self.m_original_input_image.qpix_scaled)
+        self.__update_opacity()
 
     def resize_window(self, new_size_width: int):
         # print(
@@ -182,18 +187,17 @@ class DrawingWorker(QtCore.QThread):
     def __init__(self):
         QtCore.QThread.__init__(self)
 
-    def start_drawing(
-        self,
-        drawing_domain: Tuple[int, int, int, int],
-        color_palette: dict,
-        output_img: img_file,
-        #   resize_method: str = "LANCZOS",
-        home: Tuple[int, int] = (0, 0)):
+    def start_drawing(self, drawing_domain: Tuple[int, int, int,
+                                                  int], color_palette: dict,
+                      output_img: img_file, home: Tuple[int, int],
+                      drawing_speed: float, waiting_speed: float):
         self.drawing_domain = drawing_domain
         self.color_palette_dict = color_palette
         self.qpix_input_image: img_file = output_img
         # self.resize_method = resize_method
         self.home = home
+        self.drawing_speed = drawing_speed
+        self.waiting_speed = waiting_speed
 
         self.resize_resample = {
             "NEAREST": Image.NEAREST,
@@ -215,7 +219,18 @@ class DrawingWorker(QtCore.QThread):
             self.que[color] = []
 
         print("now generating que")
-        self.img = np.array(Image.open(self.qpix_input_image.filename))
+        self.img = Image.open(self.qpix_input_image.filename)
+
+        # if the image has transparency replace that transparency
+        # TODO make a function for this
+        if img.mode != "RGB":
+            png = img.convert('RGBA')
+            background = Image.new('RGBA', png.size, (255, 255, 255))
+
+            alpha_composite = Image.alpha_composite(background, png)
+            img = alpha_composite.convert('RGB')
+
+        self.img = np.array(self.img)
 
         for y in range(self.img.shape[1] - 1):
             if not y % 10:
@@ -245,21 +260,24 @@ class DrawingWorker(QtCore.QThread):
             print(i)
             # if i == list(self.color_pallette.keys())[1]:
             #     return
-            sleep(0.2)
+            # sleep(0.2)
 
             x, y = self.home
             mouse.move(x, y)
             # sleep(0.15)
-            sleep(1)
+            sleep(self.waiting_speed)
             mouse.click()
-            sleep(1)
+            sleep(self.waiting_speed)
+            # sleep(1)
             # select the color
             x, y = self.color_palette_dict[i]
             print("color = ", i, "@", x, y)
             mouse.move(x, y)
-            sleep(0.15)
+            sleep(self.waiting_speed)
+            # sleep(0.15)
             mouse.click()
-            sleep(0.15)
+            sleep(self.waiting_speed)
+            # sleep(0.15)
 
             for j in self.que[i]:
                 # update progrssbar
@@ -268,9 +286,9 @@ class DrawingWorker(QtCore.QThread):
                                        (self.img.shape[1] * self.img.shape[0]))
                     if curr_precent > prev_percent:
                         prev_percent = curr_precent
-                        sleep(0.2)
-                        self.progress_signal.emit(curr_precent)
-                        sleep(0.2)
+                        # sleep(0.2)
+                        # self.progress_signal.emit(curr_precent)
+                        # sleep(0.2)
                 if keyboard.is_pressed("escape") or keyboard.is_pressed(
                         "shift"):
                     self.progress_signal.emit(0)
@@ -284,9 +302,11 @@ class DrawingWorker(QtCore.QThread):
                     (self.drawing_domain[3] - self.drawing_domain[1]) /
                     self.img.shape[1])
                 # mouse.move(200 + x * 4, 400 + y * 4)
-                sleep(0.0000005)
+                # sleep(0.0000005)
+                sleep(self.drawing_speed)
                 mouse.click()
-                sleep(0.0000005)
+                sleep(self.drawing_speed)
+                # sleep(0.0000005)
                 colors_placed += 1
         self.progress_signal.emit(100)
 
@@ -341,18 +361,33 @@ class FloydWorker(QtCore.QThread):
 
     def run(self):
         print("starting pre-processing")
-        self.output_file_name = "./output/" + self.image_name.split("/")[-1]
+        # we want to change the output format to png
+        intermediate_filename = self.image_name.split("/")[-1]
+        intermediate_filename_parts = intermediate_filename.split(".")
+        intermediate_filename = '.'.join(
+            intermediate_filename_parts[:-1]) + ".png"
+        self.output_file_name = "./output/" + intermediate_filename
 
         if not isinstance(self.image_name, str):
             raise TypeError("filename must excist")
 
         self.hither_palette = hitherdither.palette.Palette(
             list(self.color_pallette_dict.keys()))
-        print(list(self.color_pallette_dict.keys()))
+        # print(list(self.color_pallette_dict.keys()))
 
         img = Image.open(self.image_name).resize(
             self.size, self.resize_resample[self.resize_method])
         # img.show()
+
+        # if the image is a png the transparancy needs to be removed
+        # TODO make the background color custom adjustable
+        # TODO add support for other image modes
+        if img.mode != "RGB":
+            png = img.convert('RGBA')
+            background = Image.new('RGBA', png.size, (255, 255, 255))
+
+            alpha_composite = Image.alpha_composite(background, png)
+            img = alpha_composite.convert('RGB')
 
         print("starting processing")
         if self.dither_method in self.error_diffusion_dithering:
@@ -368,10 +403,41 @@ class FloydWorker(QtCore.QThread):
 
         # img_dithered.show()
 
+        # TODO dit is nog overbodig
         if img_dithered.mode != 'RGB':
             img_dithered = img_dithered.convert('RGB')
 
-        img_dithered.save(self.output_file_name)
+        # img_dithered.show()
+
+        try:
+            os.makedirs("./output")
+        except FileExistsError:
+            pass
+
+        # TODO the image always needs to be saved as a png
+        try:
+            img_dithered.save(self.output_file_name)
+        except PermissionError as error:
+            tmp = str(error)
+            print("het ging fout", tmp)
+            return
+            # tmp = str(error)
+            # print("het ging fout")
+            # QtWidgets.QMessageBox.about(
+            #     self, tmp,
+            #     "Waarschijnlijk heeft python geen toegang tot de output map")
+
+            # tmp = str(error)
+
+            # error_dialog = QtWidgets.QMessageBox(QtWidgets.QMainWindow)
+            # error_dialog.setIcon(QtWidgets.QMessageBox.Critical)
+            # error_dialog.setText("permission error")
+            # error_dialog.setInformativeText(
+            #     tmp +
+            #     "\nWaarschijnlijk heeft python geen toegang tot de output map")
+            # error_dialog.setWindowTitle("Error")
+            # error_dialog.exec_()
+
         self.output_name_signal.emit(self.output_file_name)
         print("done")
 
@@ -429,19 +495,28 @@ class Ui_Image_drawer(QtWidgets.QMainWindow):
     def __init__(self):
         super(Ui_Image_drawer, self).__init__()
         # super().__init__()
-        print((self))
-        print(type(self))
+        # print((self))
+        # print(type(self))
+
         # define defaults
         self.DEFAULT_IMG_MENU_SIZE = 180
-        self.DEFAULT_INPUT_IMG = img_file("./sources/eend.jpg",
+        self.DEFAULT_INPUT_IMG = img_file("./sources/eend.png",
                                           self.DEFAULT_IMG_MENU_SIZE)
-        self.DEFAULT_OUTPUT_IMG = img_file("./sources/eend_out.jpg",
+        self.DEFAULT_OUTPUT_IMG = img_file("./sources/eend_out.png",
                                            self.DEFAULT_IMG_MENU_SIZE)
         self.DEFAULT_WINDOW_SIZE = (430, 700)
         self.DEFAULT_OUTPUT_IMG_SIZE = (40, 40)
         self.DEFAULT_SCALE_METHOD = "NEAREST"
         self.DEFAULT_DITHER_METHOD = "Floyd-Steinberg"
         self.DEFAULT_HOME = (0, 0)
+        self.DEFAULT_PREVIEW_OPACITY = 80
+
+        # drawing speeds in seconds
+        self.AVAILABLE_DRAWING_SPEEDS = [
+            0.0001, 0.000005, 0.000001, 0.0000005, 0.0000002
+        ]
+        # waiting speeds in seconds
+        self.AVAILABLE_WAITING_SPEEDS = [0.000001, 0.15, 1, 4]
 
         self.img_menu_size = self.DEFAULT_IMG_MENU_SIZE
         self.input_img = self.DEFAULT_INPUT_IMG
@@ -458,7 +533,13 @@ class Ui_Image_drawer(QtWidgets.QMainWindow):
         self.drawn_palette_colors = []
 
         self.floating_image_preview_window = FloatingPreview(
-            img_file(self.output_img.filename, self.output_img_size[1]))
+            img_file(self.output_img.filename, self.output_img_size[1]),
+            self.DEFAULT_PREVIEW_OPACITY)
+
+        icon = QtGui.QIcon()
+        icon.addPixmap(QtGui.QPixmap("./sources/eend.png"),
+                       QtGui.QIcon.Selected, QtGui.QIcon.On)
+        self.setWindowIcon(icon)
 
     def UI_setup(self, Image_drawer):
         self.UI_window(Image_drawer)
@@ -496,6 +577,8 @@ class Ui_Image_drawer(QtWidgets.QMainWindow):
         sizePolicy.setHeightForWidth(
             self.centralwidget.sizePolicy().hasHeightForWidth())
         self.centralwidget.setSizePolicy(sizePolicy)
+
+        # self.setWindowTitle("image-plotter")
 
     def UI_vertical_layout(self):
         self.veticalLayout_outer = QtWidgets.QVBoxLayout(self.centralwidget)
@@ -706,7 +789,7 @@ class Ui_Image_drawer(QtWidgets.QMainWindow):
         self.dial_output_size.setCursor(
             QtGui.QCursor(QtCore.Qt.PointingHandCursor))
         self.dial_output_size.setMinimum(1)
-        self.dial_output_size.setMaximum(501)
+        self.dial_output_size.setMaximum(801)
         self.dial_output_size.setProperty("value", 99)
         self.dial_output_size.setTracking(True)
         self.dial_output_size.setOrientation(QtCore.Qt.Horizontal)
@@ -725,7 +808,8 @@ class Ui_Image_drawer(QtWidgets.QMainWindow):
             QtGui.QCursor(QtCore.Qt.PointingHandCursor))
         self.dial_output_opacity.setMinimum(0)
         self.dial_output_opacity.setMaximum(100)
-        self.dial_output_opacity.setProperty("value", 80)
+        self.dial_output_opacity.setProperty("value",
+                                             self.DEFAULT_PREVIEW_OPACITY)
         self.dial_output_opacity.setTracking(True)
         self.dial_output_opacity.valueChanged.connect(
             self.opacity_floating_placer)
@@ -916,8 +1000,9 @@ class Ui_Image_drawer(QtWidgets.QMainWindow):
             self.centralwidget)
         self.horizontalSlider_drawing_speed.setCursor(
             QtGui.QCursor(QtCore.Qt.PointingHandCursor))
-        self.horizontalSlider_drawing_speed.setMinimum(1)
-        self.horizontalSlider_drawing_speed.setMaximum(5)
+        self.horizontalSlider_drawing_speed.setMinimum(0)
+        self.horizontalSlider_drawing_speed.setMaximum(4)
+        self.horizontalSlider_drawing_speed.setValue(2)
         self.horizontalSlider_drawing_speed.setPageStep(1)
         self.horizontalSlider_drawing_speed.setOrientation(
             QtCore.Qt.Horizontal)
@@ -926,6 +1011,8 @@ class Ui_Image_drawer(QtWidgets.QMainWindow):
         self.horizontalSlider_drawing_speed.setTickPosition(
             QtWidgets.QSlider.TicksBelow)
         self.horizontalSlider_drawing_speed.setTickInterval(1)
+        self.horizontalSlider_drawing_speed.valueChanged.connect(
+            self.update_drawing_speed)
         self.verticalLayout_drawing_speed.addWidget(
             self.horizontalSlider_drawing_speed)
 
@@ -1011,14 +1098,16 @@ class Ui_Image_drawer(QtWidgets.QMainWindow):
 
         self.horizontalSlider_waiting_speed = QtWidgets.QSlider(
             self.centralwidget)
-        self.horizontalSlider_waiting_speed.setMinimum(1)
+        self.horizontalSlider_waiting_speed.setMinimum(0)
         self.horizontalSlider_waiting_speed.setMaximum(3)
-        self.horizontalSlider_waiting_speed.setProperty("value", 2)
+        self.horizontalSlider_waiting_speed.setProperty("value", 1)
         self.horizontalSlider_waiting_speed.setOrientation(
             QtCore.Qt.Horizontal)
         self.horizontalSlider_waiting_speed.setTickPosition(
             QtWidgets.QSlider.TicksBelow)
         self.horizontalSlider_waiting_speed.setTickInterval(1)
+        self.horizontalSlider_waiting_speed.valueChanged.connect(
+            self.update_waiting_speed)
         self.verticalLayout_waiting_speed.addWidget(
             self.horizontalSlider_waiting_speed)
 
@@ -1026,14 +1115,14 @@ class Ui_Image_drawer(QtWidgets.QMainWindow):
         self.label_waiting_speed_1 = QtWidgets.QLabel(self.centralwidget)
         self.horizontalLayout.addWidget(self.label_waiting_speed_1)
 
-        spacerItem4 = QtWidgets.QSpacerItem(40, 20,
-                                            QtWidgets.QSizePolicy.Expanding,
-                                            QtWidgets.QSizePolicy.Minimum)
-        self.horizontalLayout.addItem(spacerItem4)
-        self.line_11 = QtWidgets.QFrame(self.centralwidget)
-        self.line_11.setFrameShape(QtWidgets.QFrame.VLine)
-        self.line_11.setFrameShadow(QtWidgets.QFrame.Sunken)
-        self.horizontalLayout.addWidget(self.line_11)
+        # spacerItem4 = QtWidgets.QSpacerItem(40, 20,
+        #                                     QtWidgets.QSizePolicy.Expanding,
+        #                                     QtWidgets.QSizePolicy.Minimum)
+        # self.horizontalLayout.addItem(spacerItem4)
+        # self.line_11 = QtWidgets.QFrame(self.centralwidget)
+        # self.line_11.setFrameShape(QtWidgets.QFrame.VLine)
+        # self.line_11.setFrameShadow(QtWidgets.QFrame.Sunken)
+        # self.horizontalLayout.addWidget(self.line_11)
 
         spacerItem5 = QtWidgets.QSpacerItem(40, 20,
                                             QtWidgets.QSizePolicy.Expanding,
@@ -1078,18 +1167,23 @@ class Ui_Image_drawer(QtWidgets.QMainWindow):
         self.menubar.setGeometry(QtCore.QRect(0, 0, 549, 21))
         self.menuBestanden = QtWidgets.QMenu(self.menubar)
 
-        self.actionSla_op = QtWidgets.QAction(Image_drawer)
-        self.actionSla_op.setShortcutVisibleInContextMenu(False)
         self.actionLaad_in = QtWidgets.QAction(Image_drawer)
         self.actionLaad_in.setCheckable(False)
         self.actionLaad_in.setShortcutContext(QtCore.Qt.WindowShortcut)
+        self.actionLaad_in.triggered.connect(self.open_file_dialog)
         self.menuBestanden.addAction(self.actionLaad_in)
+
+        self.actionSla_op = QtWidgets.QAction(Image_drawer)
+        self.actionSla_op.setShortcutVisibleInContextMenu(False)
+        self.actionSla_op.triggered.connect(self.save_file_dialog)
         self.menuBestanden.addAction(self.actionSla_op)
+
         self.menubar.addAction(self.menuBestanden.menuAction())
 
     def retranslateUi(self, Image_drawer):
         _translate = QtCore.QCoreApplication.translate
-        Image_drawer.setWindowTitle(_translate("Image_drawer", "MainWindow"))
+        Image_drawer.setWindowTitle(_translate("Image_drawer",
+                                               "image-plotter"))
         self.pushButton_generate_output.setText(
             _translate("Image_drawer", "Generate output"))
         self.checkBox_display_image_placing.setText(
@@ -1168,6 +1262,14 @@ class Ui_Image_drawer(QtWidgets.QMainWindow):
         self.progressBar_home_set.setProperty("value", 1)
         self.home = pos
 
+    def update_drawing_speed(self):
+        self.drawing_speed = self.AVAILABLE_DRAWING_SPEEDS[
+            self.horizontalSlider_drawing_speed.value()]
+
+    def update_waiting_speed(self):
+        self.waiting_speed = self.AVAILABLE_WAITING_SPEEDS[
+            self.horizontalSlider_waiting_speed.value()]
+
     def show_hide_floating_placer(self):
         if self.checkBox_display_image_placing.isChecked():
             self.floating_image_preview_window.show()
@@ -1181,6 +1283,50 @@ class Ui_Image_drawer(QtWidgets.QMainWindow):
     def opacity_floating_placer(self):
         self.floating_image_preview_window.change_opacity(
             int(self.dial_output_opacity.value()))
+
+    def open_file_dialog(self):
+        # print("to be implemented")
+        options = QtWidgets.QFileDialog.Options()
+        # options |= QFileDialog.DontUseNativeDialog
+        self.input_fileName, _ = QtWidgets.QFileDialog.getOpenFileName(
+            self,
+            "QFileDialog.getOpenFileName()",
+            "",
+            "All Files (*);;JPG (*.jpg);;png (*.png);;bmp (*.bmp)",
+            # "JPG (*.jpg)",
+            options=options)
+        try:
+            if self.input_fileName[-3:] == "svg":
+                print("Ik heb geen implementatie voor svg. ")
+                QtWidgets.QMessageBox.about(
+                    self, "Helaas",
+                    "Ik heb nog geen implementatie voor svg bestanden")
+                return
+        except AttributeError as error:
+            tmp = str(error)
+            print("het ging fout")
+            QtWidgets.QMessageBox.about(
+                self, tmp, "Je afbeelding is waarschijnlijk niet mooi genoeg")
+
+        if not self.input_fileName:
+            return
+
+        # maak de input de nieuwe input
+        self.input_img = img_file(self.input_fileName, self.img_menu_size)
+        self.update_menu_img()
+
+    def save_file_dialog(self):
+        print("to be implemented")
+        options = QtWidgets.QFileDialog.Options()
+        # options |= QFileDialog.DontUseNativeDialog
+        fileName, _ = QtWidgets.QFileDialog.getSaveFileName(
+            self,
+            "QFileDialog.getSaveFileName()",
+            "",
+            "All Files (*);;Text Files (*.txt)",
+            options=options)
+        if fileName:
+            print(fileName)
 
     def assign_dither_method(self):
         self.dither_method = self.comboBox_dither_method.currentText()
@@ -1212,11 +1358,31 @@ class Ui_Image_drawer(QtWidgets.QMainWindow):
             # self.spinBox_input_colors.setValue(len(self.color_pallette.keys())+1)
         self.color_pallette[color] = position
         self.spinBox_input_colors.setValue(len(self.color_pallette.keys()))
-        print(data)
+        print("toegevoegd:", data)
         # print(self.color_pallette)
 
+    def empty_palette_error(self):
+        # error_dialog = QtWidgets.QErrorMessage(self)
+        error_dialog = QtWidgets.QMessageBox(self)
+        error_dialog.setIcon(QtWidgets.QMessageBox.Critical)
+        error_dialog.setText("Error")
+        error_dialog.setInformativeText(
+            'There are no colors in the colorpalette')
+        error_dialog.setWindowTitle("Error")
+        error_dialog.exec_()
+        # error_dialog.showMessage('There are no colors in the color palette')
+        # QtWidgets.QMessageBox.about(
+        #     self, "whoops", "There are no colors in the color palette")
+
     def floyd(self):
-        print(self.color_pallette)
+        if len(self.color_pallette) == 0:
+            self.empty_palette_error()
+            return
+
+        self.checkBox_input_colors.setChecked(QtCore.Qt.Unchecked)
+        self.load_pallete()
+
+        # print(self.color_pallette)
         self.floyd_thread.color_pallette_dict = self.color_pallette
         self.floyd_thread.resize_method = self.scale_method
         self.floyd_thread.dither_method = self.dither_method
@@ -1236,21 +1402,6 @@ class Ui_Image_drawer(QtWidgets.QMainWindow):
         self.floating_image_preview_window.update_image()
 
     def draw_output(self):
-        # x, y = self.floating_image_preview_window.m_label.x(
-        # ), self.floating_image_preview_window.m_label.y()
-        # width, height = self.floating_image_preview_window.m_original_input_image.qpix_scaled.width(
-        # ), self.floating_image_preview_window.m_original_input_image.qpix_scaled.height(
-        # )
-        # geom = self.floating_image_preview_window.m_label.geometry()
-        # drawing_domain_window = (geom.left(), geom.top(), geom.right(),
-        #                          geom.bottom())
-
-        # print(f"drawing domain window {drawing_domain_window}")
-        # geom = self.floating_image_preview_window.m_label.geometry()
-
-        # x_window, y_window, _, _ = self.floating_image_preview_window.geometry()
-        # drawing_domain = (x, y, x + width, y + height)
-
         geom_window = self.floating_image_preview_window.geometry()
         win_x, win_y = geom_window.left(), geom_window.top()
         geom_img = self.floating_image_preview_window.m_label.geometry()
@@ -1261,15 +1412,33 @@ class Ui_Image_drawer(QtWidgets.QMainWindow):
 
         # print(f"drawing domain {drawing_domain}")
         # print("hier moet nog een resize method worden toegevoegd")
+        self.checkBox_display_image_placing.setChecked(QtCore.Qt.Unchecked)
+        self.show_hide_floating_placer()
+
         self.drawing_thread.start_drawing(drawing_domain, self.color_pallette,
-                                          self.output_img, self.home)
+                                          self.output_img, self.home,
+                                          self.drawing_speed,
+                                          self.waiting_speed)
+
+    def peer(self, event):
+        self.floating_image_preview_window.close()
 
 
 if __name__ == "__main__":
     import sys
     app = QtWidgets.QApplication(sys.argv)
     Image_drawer = QtWidgets.QMainWindow()
+    icon = QtGui.QIcon()
+    icon.addPixmap(QtGui.QPixmap("./sources/eend.png"), QtGui.QIcon.Selected,
+                   QtGui.QIcon.On)
+    # self.setWindowIcon(icon)
+    Image_drawer.setWindowIcon(icon)
+
     ui = Ui_Image_drawer()
+
+    Image_drawer.closeEvent = ui.peer
+
     ui.UI_setup(Image_drawer)
+
     Image_drawer.show()
     sys.exit(app.exec_())
