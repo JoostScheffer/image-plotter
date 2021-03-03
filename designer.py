@@ -6,7 +6,8 @@ from typing import Tuple, Dict
 from time import sleep
 import keyboard
 import mouse
-from PIL import ImageGrab, Image
+from PIL import Image
+import pyscreenshot as ImageGrab
 from operator import itemgetter
 import numpy as np
 import hitherdither
