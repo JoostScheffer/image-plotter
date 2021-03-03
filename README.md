@@ -1,4 +1,5 @@
 # image-plotter
+*Now also on Linux*\
  Is able to plot images using a qt desktop application and your mouse
  ## build
  ### install packages with pip
