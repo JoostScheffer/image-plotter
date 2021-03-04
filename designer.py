@@ -104,7 +104,7 @@ class FloatingPreview(QtWidgets.QWidget):
 
         self.setWindowFlag(QtCore.Qt.FramelessWindowHint, True)
         self.setWindowFlag(QtCore.Qt.WindowStaysOnTopHint, True)
-        self.setStyleSheet("QMainWindow {background: transparent; }\n"
+        self.setStyleSheet("QMainWindow {background: transparent;}\n"
                            "QToolTip {\n"
                            "    color: #ffffff;\n"
                            "    background-color: rgba(227, 29, 35, 160);\n"
@@ -199,6 +199,8 @@ class DrawingWorker(QtCore.QThread):
         self.home = home
         self.drawing_speed = drawing_speed
         self.waiting_speed = waiting_speed
+        # TODO
+        self.background_color = (255, 255, 255)
 
         self.resize_resample = {
             "NEAREST": Image.NEAREST,
@@ -224,33 +226,24 @@ class DrawingWorker(QtCore.QThread):
 
         # if the image has transparency replace that transparency
         # TODO make a function for this
-        if img.mode != "RGB":
-            png = img.convert('RGBA')
+        if self.img.mode != "RGB":
+            png = self.img.convert('RGBA')
             background = Image.new('RGBA', png.size, (255, 255, 255))
 
             alpha_composite = Image.alpha_composite(background, png)
-            img = alpha_composite.convert('RGB')
+            self.img = alpha_composite.convert('RGB')
 
         self.img = np.array(self.img)
 
+        # itterate over pixels and add color to que
         for y in range(self.img.shape[1] - 1):
-            if not y % 10:
+            if y % 10 == 0:
                 self.progress_signal.emit(int(100 / self.img.shape[1] * y))
             for x in range(self.img.shape[0] - 1):
                 color = tuple(self.img[x, y])
-                if color not in self.que:
-                    color = self.nearest_colour(color)
-                    # print(f"kleur {color} @ {x},{y} not in que")
-                    # print(self.que)
-                    # sys.exit(1)
                 self.que[color].append((x, y))
 
         self.progress_signal.emit(100)
-        # print(self.que)
-        # width = self.qpix_input_image.max_size
-        # img_scaled = img.resize(
-        #     (width, int(width / self.qpix_input_image.aspect_ratio)),
-        #     self.resize_resample[self.resize_method])
 
     def draw_with_mouse(self):
         self.progress_signal.emit(0)
@@ -258,11 +251,12 @@ class DrawingWorker(QtCore.QThread):
         colors_placed = 0
         prev_percent = 0
         for i in list(self.color_palette_dict.keys()):
-            print(i)
-            # if i == list(self.color_pallette.keys())[1]:
-            #     return
-            # sleep(0.2)
+            if i == self.background_color:
+                continue
 
+            # print(i)
+
+            # sleep(0.2)
             x, y = self.home
             mouse.move(x, y)
             # sleep(0.15)
@@ -310,17 +304,6 @@ class DrawingWorker(QtCore.QThread):
                 # sleep(0.0000005)
                 colors_placed += 1
         self.progress_signal.emit(100)
-
-    def nearest_colour(self, query):
-        distances = {}
-        colors = tuple(self.color_palette_dict.keys())
-        for color in colors:
-            distance = sum((s - q)**2 for s, q in zip(color, query))
-            distances[distance] = color
-
-        min_distance = min(list(distances.keys()))
-
-        return distances[min_distance]
 
 
 class FloydWorker(QtCore.QThread):
@@ -516,8 +499,16 @@ class Ui_Image_drawer(QtWidgets.QMainWindow):
         self.AVAILABLE_DRAWING_SPEEDS = [
             0.0001, 0.000005, 0.000001, 0.0000005, 0.0000002
         ]
+        self.DEFAULT_DRAWING_SPEED_IDX = 2
+        self.drawing_speed = self.AVAILABLE_DRAWING_SPEEDS[
+            self.DEFAULT_DRAWING_SPEED_IDX]
         # waiting speeds in seconds
         self.AVAILABLE_WAITING_SPEEDS = [0.000001, 0.15, 1, 4]
+        self.DEFAULT_WAITING_SPEED_IDX = 1
+        self.waiting_speed = self.AVAILABLE_WAITING_SPEEDS[
+            self.DEFAULT_WAITING_SPEED_IDX]
+        # file types which we let the user input
+        self.ACCEPTED_FILETYPES = ["jpg", "png", "bmp"]
 
         self.img_menu_size = self.DEFAULT_IMG_MENU_SIZE
         self.input_img = self.DEFAULT_INPUT_IMG
@@ -537,9 +528,9 @@ class Ui_Image_drawer(QtWidgets.QMainWindow):
             img_file(self.output_img.filename, self.output_img_size[1]),
             self.DEFAULT_PREVIEW_OPACITY)
 
-        icon = QtGui.QIcon()
-        icon.addPixmap(QtGui.QPixmap("./sources/eend.png"),
-                       QtGui.QIcon.Selected, QtGui.QIcon.On)
+        icon = QtGui.QIcon("./sources/icon.png")
+        # icon.addPixmap(QtGui.QPixmap("./sources/eend.png"),
+        #                QtGui.QIcon.Selected, QtGui.QIcon.On)
         self.setWindowIcon(icon)
 
     def UI_setup(self, Image_drawer):
@@ -1002,8 +993,10 @@ class Ui_Image_drawer(QtWidgets.QMainWindow):
         self.horizontalSlider_drawing_speed.setCursor(
             QtGui.QCursor(QtCore.Qt.PointingHandCursor))
         self.horizontalSlider_drawing_speed.setMinimum(0)
-        self.horizontalSlider_drawing_speed.setMaximum(4)
-        self.horizontalSlider_drawing_speed.setValue(2)
+        self.horizontalSlider_drawing_speed.setMaximum(
+            len(self.AVAILABLE_DRAWING_SPEEDS) - 1)
+        self.horizontalSlider_drawing_speed.setValue(
+            self.DEFAULT_DRAWING_SPEED_IDX)
         self.horizontalSlider_drawing_speed.setPageStep(1)
         self.horizontalSlider_drawing_speed.setOrientation(
             QtCore.Qt.Horizontal)
@@ -1100,8 +1093,11 @@ class Ui_Image_drawer(QtWidgets.QMainWindow):
         self.horizontalSlider_waiting_speed = QtWidgets.QSlider(
             self.centralwidget)
         self.horizontalSlider_waiting_speed.setMinimum(0)
-        self.horizontalSlider_waiting_speed.setMaximum(3)
-        self.horizontalSlider_waiting_speed.setProperty("value", 1)
+        self.horizontalSlider_waiting_speed.setMaximum(
+            len(self.AVAILABLE_WAITING_SPEEDS) - 1)
+        self.horizontalSlider_waiting_speed.setValue(
+            self.DEFAULT_WAITING_SPEED_IDX)
+        self.horizontalSlider_waiting_speed.setPageStep(1)
         self.horizontalSlider_waiting_speed.setOrientation(
             QtCore.Qt.Horizontal)
         self.horizontalSlider_waiting_speed.setTickPosition(
@@ -1166,20 +1162,20 @@ class Ui_Image_drawer(QtWidgets.QMainWindow):
     def UI_menubar(self):
         self.menubar = QtWidgets.QMenuBar(Image_drawer)
         self.menubar.setGeometry(QtCore.QRect(0, 0, 549, 21))
-        self.menuBestanden = QtWidgets.QMenu(self.menubar)
+        self.menuFiles = QtWidgets.QMenu(self.menubar)
 
-        self.actionLaad_in = QtWidgets.QAction(Image_drawer)
-        self.actionLaad_in.setCheckable(False)
-        self.actionLaad_in.setShortcutContext(QtCore.Qt.WindowShortcut)
-        self.actionLaad_in.triggered.connect(self.open_file_dialog)
-        self.menuBestanden.addAction(self.actionLaad_in)
+        self.actionLoad_input = QtWidgets.QAction(Image_drawer)
+        self.actionLoad_input.setCheckable(False)
+        self.actionLoad_input.setShortcutContext(QtCore.Qt.WindowShortcut)
+        self.actionLoad_input.triggered.connect(self.open_file_dialog)
+        self.menuFiles.addAction(self.actionLoad_input)
 
-        self.actionSla_op = QtWidgets.QAction(Image_drawer)
-        self.actionSla_op.setShortcutVisibleInContextMenu(False)
-        self.actionSla_op.triggered.connect(self.save_file_dialog)
-        self.menuBestanden.addAction(self.actionSla_op)
+        self.actionSave_output = QtWidgets.QAction(Image_drawer)
+        self.actionSave_output.setShortcutVisibleInContextMenu(False)
+        self.actionSave_output.triggered.connect(self.save_file_dialog)
+        self.menuFiles.addAction(self.actionSave_output)
 
-        self.menubar.addAction(self.menuBestanden.menuAction())
+        self.menubar.addAction(self.menuFiles.menuAction())
 
     def retranslateUi(self, Image_drawer):
         _translate = QtCore.QCoreApplication.translate
@@ -1191,11 +1187,11 @@ class Ui_Image_drawer(QtWidgets.QMainWindow):
             _translate("Image_drawer", "Display image placing preview"))
         # self.label_pixmap_output_image.setText(
         #     _translate("Image_drawer", "Output image"))
-        self.label_input_image.setText(_translate("Image_drawer", "Invoer"))
+        self.label_input_image.setText(_translate("Image_drawer", "Input"))
         self.label_output_image.setText(
-            _translate("Image_drawer", "Uitvoer (approx)"))
+            _translate("Image_drawer", "Output (approx)"))
         self.label_afbeelding_menu_grootte.setText(
-            _translate("Image_drawer", "Afbeelding grootte (px)"))
+            _translate("Image_drawer", "Menu image size (px)"))
         self.label_dither_method.setText(
             _translate("Image_drawer", "Color quantization method"))
         self.label_scale_method.setText(
@@ -1209,30 +1205,34 @@ class Ui_Image_drawer(QtWidgets.QMainWindow):
         self.checkBox_set_home.setText(_translate("Image_drawer", "Set home"))
         self.progressBar_home_set.setFormat(_translate("Image_drawer", "%p%"))
         self.label_output_size.setText(
-            _translate("Image_drawer", "preview size"))
+            _translate("Image_drawer", "Preview size"))
         self.label_output_opacity.setText(
-            _translate("Image_drawer", "preview opacity"))
+            _translate("Image_drawer", "Preview opacity"))
         self.label_output_resolution.setText(
-            _translate("Image_drawer", "output resolution"))
-        self.label_output_resolution_x.setText(_translate("Image_drawer", "x"))
-        self.label_output_resolution_y.setText(_translate("Image_drawer", "y"))
+            _translate("Image_drawer", "Output resolution"))
+        self.label_output_resolution_x.setText(
+            _translate("Image_drawer", "x (px)"))
+        self.label_output_resolution_y.setText(
+            _translate("Image_drawer", "y (px)"))
         self.label_drawing_speed_0.setText(
             _translate("Image_drawer", "Drawing speed"))
         self.label_drawing_speed_1.setText(
-            _translate("Image_drawer", "slow and steady"))
+            _translate("Image_drawer", "Slow and steady"))
         self.label_drawing_speed_2.setText(
             _translate("Image_drawer", "I trust my computer"))
         self.label_drawing_speed_3.setText(_translate("Image_drawer", "Zoom"))
         self.label_waiting_speed_0.setText(
             _translate("Image_drawer", "Waiting speed"))
-        self.label_waiting_speed_1.setText(_translate("Image_drawer", "short"))
-        self.label_waiting_speed_2.setText(_translate("Image_drawer", " long"))
+        self.label_waiting_speed_1.setText(_translate("Image_drawer", "Short"))
+        self.label_waiting_speed_2.setText(_translate("Image_drawer", " Long"))
         # self.label_progress.setText(_translate("Image_drawer", "Progress"))
         self.label_color_pallete.setText(
             _translate("Image_drawer", "Color pallete preview:"))
-        self.menuBestanden.setTitle(_translate("Image_drawer", "Bestand"))
-        self.actionSla_op.setText(_translate("Image_drawer", "Sla op"))
-        self.actionLaad_in.setText(_translate("Image_drawer", "Laad in"))
+        self.menuFiles.setTitle(_translate("Image_drawer", "Files"))
+        self.actionSave_output.setText(
+            _translate("Image_drawer", "Save output file"))
+        self.actionLoad_input.setText(
+            _translate("Image_drawer", "Load input file"))
 
     def init_thread(self):
         self.pallete_thread = ColorWorker()
@@ -1286,16 +1286,16 @@ class Ui_Image_drawer(QtWidgets.QMainWindow):
             int(self.dial_output_opacity.value()))
 
     def open_file_dialog(self):
-        # print("to be implemented")
         options = QtWidgets.QFileDialog.Options()
+        # there is an option to not use the native dialog
         # options |= QFileDialog.DontUseNativeDialog
         self.input_fileName, _ = QtWidgets.QFileDialog.getOpenFileName(
             self,
             "QFileDialog.getOpenFileName()",
             "",
-            "All Files (*);;JPG (*.jpg);;png (*.png);;bmp (*.bmp)",
-            # "JPG (*.jpg)",
+            f"Image Files ({' '.join(['*.'+x for x in self.ACCEPTED_FILETYPES])});;All Files (*);;{';;'.join([f'{x} (*.{x})' for x in self.ACCEPTED_FILETYPES])}",
             options=options)
+
         try:
             if self.input_fileName[-3:] == "svg":
                 print("Ik heb geen implementatie voor svg. ")
@@ -1309,10 +1309,11 @@ class Ui_Image_drawer(QtWidgets.QMainWindow):
             QtWidgets.QMessageBox.about(
                 self, tmp, "Je afbeelding is waarschijnlijk niet mooi genoeg")
 
+        # if no file was selected return
         if not self.input_fileName:
             return
 
-        # maak de input de nieuwe input
+        # change input image to selected image
         self.input_img = img_file(self.input_fileName, self.img_menu_size)
         self.update_menu_img()
 
@@ -1421,7 +1422,9 @@ class Ui_Image_drawer(QtWidgets.QMainWindow):
                                           self.drawing_speed,
                                           self.waiting_speed)
 
-    def peer(self, event):
+    def onClose(self, event):
+        '''called when the main window is closed
+        '''
         self.floating_image_preview_window.close()
 
 
@@ -1437,7 +1440,7 @@ if __name__ == "__main__":
 
     ui = Ui_Image_drawer()
 
-    Image_drawer.closeEvent = ui.peer
+    Image_drawer.closeEvent = ui.onClose
 
     ui.UI_setup(Image_drawer)
 
