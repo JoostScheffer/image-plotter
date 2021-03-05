@@ -16,6 +16,7 @@ import os
 # TODO check of afbeelding bestaat
 # TODO maak color pallete preview of een grid of geef het een scrollbar
 # TODO before drawing have a popup which states the estimated drawing time, amount of dots and amount of colors and have user confirm
+# TODO make alpha mask use background color
 
 
 def grab_color() -> Tuple[Tuple[int, int, int], Tuple[int, int]]:
@@ -37,6 +38,7 @@ def grab_color() -> Tuple[Tuple[int, int, int], Tuple[int, int]]:
 class QPaletteButton(QtWidgets.QPushButton):
     def __init__(self, rgb_color):
         super().__init__()
+        self.rgb_color = rgb_color
         self.setFixedSize(QtCore.QSize(24, 24))
 
         self.color = '#{:02x}{:02x}{:02x}'.format(*rgb_color)
@@ -45,6 +47,7 @@ class QPaletteButton(QtWidgets.QPushButton):
                            self.color)
 
     def update_color(self, rgb_color):
+        self.rgb_color = rgb_color
         self.color = '#{:02x}{:02x}{:02x}'.format(*rgb_color)
         self.setStyleSheet("border :1px solid ;background-color: %s;" %
                            self.color)
@@ -266,7 +269,7 @@ class DrawingWorker(QtCore.QThread):
             # sleep(1)
             # select the color
             x, y = self.color_palette_dict[i]
-            print("color = ", i, "@", x, y)
+            print("color =", i, "\t@", x, y)
             mouse.move(x, y)
             sleep(self.waiting_speed)
             # sleep(0.15)
