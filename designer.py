@@ -17,6 +17,11 @@ import os
 # TODO maak color pallete preview of een grid of geef het een scrollbar
 # TODO before drawing have a popup which states the estimated drawing time, amount of dots and amount of colors and have user confirm
 # TODO make alpha mask use background color
+# TODO progress bars
+# TODO muis op linux en mac laten werken
+# TODO aspect ratio fixen
+# TODO werkt screenshot op mac?
+# TODO werkt toetsenbord detectie op mac?
 
 
 def grab_color() -> Tuple[Tuple[int, int, int], Tuple[int, int]]:
@@ -284,6 +289,7 @@ class DrawingWorker(QtCore.QThread):
                                        (self.img.shape[1] * self.img.shape[0]))
                     if curr_precent > prev_percent:
                         prev_percent = curr_precent
+                        # TODO add percentage bars
                         # sleep(0.2)
                         # self.progress_signal.emit(curr_precent)
                         # sleep(0.2)
