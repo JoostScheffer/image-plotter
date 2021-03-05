@@ -13,12 +13,8 @@ import numpy as np
 import hitherdither
 import os
 
-# TODO https://github.com/hbldh/hitherdither
 # TODO check of afbeelding bestaat
 # TODO maak color pallete preview of een grid of geef het een scrollbar
-# TODO scaling en dither menu toepassen en verbinden
-# TODO transparantie toevoegen
-# TODO ook als png of bmp opslaan zodat je geen artifacts krijgt
 # TODO before drawing have a popup which states the estimated drawing time, amount of dots and amount of colors and have user confirm
 
 
@@ -43,9 +39,13 @@ class QPaletteButton(QtWidgets.QPushButton):
         super().__init__()
         self.setFixedSize(QtCore.QSize(24, 24))
 
-        self.rgb_color = rgb_color
         self.color = '#{:02x}{:02x}{:02x}'.format(*rgb_color)
         # self.setEnabled(False)
+        self.setStyleSheet("border :1px solid ;background-color: %s;" %
+                           self.color)
+
+    def update_color(self, rgb_color):
+        self.color = '#{:02x}{:02x}{:02x}'.format(*rgb_color)
         self.setStyleSheet("border :1px solid ;background-color: %s;" %
                            self.color)
 
@@ -433,18 +433,21 @@ class ColorWorker(QtCore.QThread):
     def __init__(self):
         QtCore.QThread.__init__(self)
         self.keep_looking = True
-        # moet een int zijn :(
-        self.short_sleep_time = 1  # s
+        # moet een int zijn wanneer de thread slaapt:(
+        # self.short_sleep_time = 1  # s
+        self.short_sleep_time = 0.4  # s
 
     # run method gets called when we start the thread
     def run(self):
         self.keep_looking = True
         while self.keep_looking:
             if keyboard.is_pressed("shift"):
-                # scrllock is misschien ook nice
+                # scrllock is misschien ook nice omdat het geen plaktoets is
                 color, position = grab_color()
                 self.color_signal.emit((color, position))
-                QtCore.QThread.sleep(self.short_sleep_time)
+                # QtCore.QThread.sleep(self.short_sleep_time)
+                # sleep(self.short_sleep_time)
+                sleep(self.short_sleep_time)
             if keyboard.is_pressed("ctrl"):
                 print(mouse.get_position())
 
@@ -489,11 +492,12 @@ class Ui_Image_drawer(QtWidgets.QMainWindow):
         self.DEFAULT_OUTPUT_IMG = img_file("./sources/eend_out.png",
                                            self.DEFAULT_IMG_MENU_SIZE)
         self.DEFAULT_WINDOW_SIZE = (430, 700)
-        self.DEFAULT_OUTPUT_IMG_SIZE = (40, 40)
+        self.DEFAULT_OUTPUT_IMG_SIZE = (100, 100)
         self.DEFAULT_SCALE_METHOD = "NEAREST"
         self.DEFAULT_DITHER_METHOD = "Floyd-Steinberg"
         self.DEFAULT_HOME = (0, 0)
         self.DEFAULT_PREVIEW_OPACITY = 80
+        self.DEFAULT_BACKGROUND_COLOR = (255, 255, 255)
 
         # drawing speeds in seconds
         self.AVAILABLE_DRAWING_SPEEDS = [
@@ -517,15 +521,15 @@ class Ui_Image_drawer(QtWidgets.QMainWindow):
         self.scale_method = self.DEFAULT_SCALE_METHOD
         self.dither_method = self.DEFAULT_DITHER_METHOD
         self.home = self.DEFAULT_HOME
+        self.background_color = self.DEFAULT_BACKGROUND_COLOR
 
         self.color_pallette = {}
-        self.palette_preview_button_list = []
 
         # which colors have been added to preview of the color_palette
         self.drawn_palette_colors = []
 
         self.floating_image_preview_window = FloatingPreview(
-            img_file(self.output_img.filename, self.output_img_size[1]),
+            img_file(self.output_img.filename, self.output_img_size[0]),
             self.DEFAULT_PREVIEW_OPACITY)
 
         icon = QtGui.QIcon("./sources/icon.png")
@@ -577,21 +581,31 @@ class Ui_Image_drawer(QtWidgets.QMainWindow):
         self.veticalLayout_outer.setSizeConstraint(
             QtWidgets.QLayout.SetMinimumSize)
 
-        self.scrollArea = QtWidgets.QScrollArea(self.centralwidget)
-        self.scrollArea.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOn)
-        self.scrollArea.setHorizontalScrollBarPolicy(
-            QtCore.Qt.ScrollBarAlwaysOff)
-        self.scrollArea.setWidgetResizable(True)
-        self.scrollArea.setMinimumWidth(self.DEFAULT_WINDOW_SIZE[0])
-        self.scrollArea.setFrameShadow(QtWidgets.QFrame.Raised)
+        scrollbar = False
+        if scrollbar:
+            # create scroll area
+            self.scrollArea = QtWidgets.QScrollArea(self.centralwidget)
+            self.scrollArea.setVerticalScrollBarPolicy(
+                QtCore.Qt.ScrollBarAlwaysOn)
+            self.scrollArea.setHorizontalScrollBarPolicy(
+                QtCore.Qt.ScrollBarAlwaysOff)
+            self.scrollArea.setWidgetResizable(True)
+            self.scrollArea.setMinimumWidth(self.DEFAULT_WINDOW_SIZE[0])
+            self.scrollArea.setFrameShadow(QtWidgets.QFrame.Raised)
 
-        self.veticalLayout_outer.addWidget(self.scrollArea)
+            # add scroll area to outer layout
+            self.veticalLayout_outer.addWidget(self.scrollArea)
 
-        self.veticalLayout_inner = QtWidgets.QVBoxLayout(self.centralwidget)
+            # create inner layout for scroll area
+            self.veticalLayout_inner = QtWidgets.QVBoxLayout()
 
-        self.main_widget = QtWidgets.QWidget()
-        self.main_widget.setLayout(self.veticalLayout_inner)
-        self.scrollArea.setWidget(self.main_widget)
+            # main widget to hold inner layer
+            self.main_widget = QtWidgets.QWidget()
+            self.main_widget.setLayout(self.veticalLayout_inner)
+            self.scrollArea.setWidget(self.main_widget)
+            # self.scrollArea.setLayout(self.veticalLayout_inner)
+        else:
+            self.veticalLayout_inner = self.veticalLayout_outer
 
         # self.veticalLayout_inner.setSizeConstraint(
         #     QtWidgets.QLayout.SetMaximumSize)
@@ -603,59 +617,293 @@ class Ui_Image_drawer(QtWidgets.QMainWindow):
         self.veticalLayout_inner.addLayout(self.gridLayout_menu_img_size)
 
         # schijdingslijn
-        self.line_img_menu_size = QtWidgets.QFrame(self.centralwidget)
-        self.line_img_menu_size.setFrameShape(QtWidgets.QFrame.HLine)
-        self.line_img_menu_size.setFrameShadow(QtWidgets.QFrame.Sunken)
-        self.veticalLayout_inner.addWidget(self.line_img_menu_size)
+        # self.line_img_menu_size = QtWidgets.QFrame(self.centralwidget)
+        # self.line_img_menu_size.setFrameShape(QtWidgets.QFrame.HLine)
+        # self.line_img_menu_size.setFrameShadow(QtWidgets.QFrame.Sunken)
+        # self.veticalLayout_inner.addWidget(self.line_img_menu_size)
 
-        self.UI_grid_layout_1()
-        self.veticalLayout_inner.addLayout(self.gridLayout_1)
+        # TODO dit gaat de grid vervangen
+        # group menu image
+        self.UI_group_menu_img()
+        self.veticalLayout_inner.addWidget(self.groupBox_menu_images)
 
-        self.line_pallete = QtWidgets.QFrame(self.centralwidget)
-        self.line_pallete.setFrameShape(QtWidgets.QFrame.HLine)
-        self.line_pallete.setFrameShadow(QtWidgets.QFrame.Sunken)
-        self.veticalLayout_inner.addWidget(self.line_pallete)
+        # group color input
+        self.UI_group_color_input()
+        self.veticalLayout_inner.addWidget(self.groupBox_color_input)
 
-        self.label_color_pallete = QtWidgets.QLabel(self.centralwidget)
-        self.veticalLayout_inner.addWidget(self.label_color_pallete)
+        # horizontal holds 2 groups
+        self.horizontalLayout_inner = QtWidgets.QHBoxLayout()
+        self.veticalLayout_inner.addLayout(self.horizontalLayout_inner)
 
-        self.UI_colorboxes()
-        self.veticalLayout_inner.addLayout(self.horizontalLayout_colorboxes)
+        # group output settings
+        self.UI_group_output_settings()
+        self.horizontalLayout_inner.addWidget(self.groupBox_output_settings)
 
-        self.UI_vertical_layout_drawing_speed()
-        self.veticalLayout_inner.addLayout(self.verticalLayout_drawing_speed)
+        # group preview settings
+        self.UI_group_preview_settings()
+        self.horizontalLayout_inner.addWidget(self.groupBox_preview_settings)
 
-        self.UI_vertical_layout_waiting_speed()
-        self.veticalLayout_inner.addLayout(self.verticalLayout_waiting_speed)
+        # group mouse settings
+        self.UI_group_mouse_settings()
+        self.veticalLayout_inner.addWidget(self.groupBox_mouse_settings)
 
-        self.line_13 = QtWidgets.QFrame(self.centralwidget)
-        self.line_13.setFrameShape(QtWidgets.QFrame.HLine)
-        self.line_13.setFrameShadow(QtWidgets.QFrame.Sunken)
-        self.veticalLayout_inner.addWidget(self.line_13)
-        '''origineer zou hier een progressbar komen maar dat is niet meer zo handig gezien ik nu een library gebruik voor het ditheren
-        wellicht kan hier later nog de progressie van het tekenen worden weergeven. Maar dit zou ook net zo goed bovenaan de ui kunnen gebeuren'''
-        self.label_progress = QtWidgets.QLabel(self.centralwidget)
-        self.label_progress.setAlignment(QtCore.Qt.AlignCenter)
-        self.veticalLayout_inner.addWidget(self.label_progress)
+        # self.UI_grid_layout_1()
+        # self.veticalLayout_inner.addLayout(self.gridLayout_1)
 
-        self.progressBar_main = QtWidgets.QProgressBar(self.centralwidget)
-        self.progressBar_main.setMaximum(100)
-        self.progressBar_main.setProperty("value", 0)
-        self.veticalLayout_inner.addWidget(self.progressBar_main)
+        # self.line_pallete = QtWidgets.QFrame(self.centralwidget)
+        # self.line_pallete.setFrameShape(QtWidgets.QFrame.HLine)
+        # self.line_pallete.setFrameShadow(QtWidgets.QFrame.Sunken)
+        # self.veticalLayout_inner.addWidget(self.line_pallete)
 
-        # self.progressBar_secondary = QtWidgets.QProgressBar(self.centralwidget)
-        # self.progressBar_secondary.setProperty("value", 0)
-        # self.veticalLayout_inner.addWidget(self.progressBar_secondary)
+        # self.UI_vertical_layout_drawing_speed()
+        # self.veticalLayout_inner.addLayout(self.verticalLayout_drawing_speed)
 
-        spacerItem6 = QtWidgets.QSpacerItem(20, 40,
-                                            QtWidgets.QSizePolicy.Minimum,
-                                            QtWidgets.QSizePolicy.Expanding)
-        self.veticalLayout_inner.addItem(spacerItem6)
+        # self.UI_vertical_layout_waiting_speed()
+        # self.veticalLayout_inner.addLayout(self.verticalLayout_waiting_speed)
 
-    def UI_grid_layout_1(self):
-        self.gridLayout_1 = QtWidgets.QGridLayout()
-        self.gridLayout_1.setHorizontalSpacing(6)
+        # self.line_13 = QtWidgets.QFrame(self.centralwidget)
+        # self.line_13.setFrameShape(QtWidgets.QFrame.HLine)
+        # self.line_13.setFrameShadow(QtWidgets.QFrame.Sunken)
+        # self.veticalLayout_inner.addWidget(self.line_13)
+        # '''origineer zou hier een progressbar komen maar dat is niet meer zo handig gezien ik nu een library gebruik voor het ditheren
+        # wellicht kan hier later nog de progressie van het tekenen worden weergeven. Maar dit zou ook net zo goed bovenaan de ui kunnen gebeuren'''
+        # self.label_progress = QtWidgets.QLabel(self.centralwidget)
+        # self.label_progress.setAlignment(QtCore.Qt.AlignCenter)
+        # self.veticalLayout_inner.addWidget(self.label_progress)
 
+        # self.progressBar_main = QtWidgets.QProgressBar(self.centralwidget)
+        # self.progressBar_main.setMaximum(100)
+        # self.progressBar_main.setProperty("value", 0)
+        # self.veticalLayout_inner.addWidget(self.progressBar_main)
+
+        # # self.progressBar_secondary = QtWidgets.QProgressBar(self.centralwidget)
+        # # self.progressBar_secondary.setProperty("value", 0)
+        # # self.veticalLayout_inner.addWidget(self.progressBar_secondary)
+
+        # spacerItem6 = QtWidgets.QSpacerItem(20, 40,
+        #                                     QtWidgets.QSizePolicy.Minimum,
+        #                                     QtWidgets.QSizePolicy.Expanding)
+        # self.veticalLayout_inner.addItem(spacerItem6)
+
+    def UI_group_menu_img(self):
+        self.groupBox_menu_images = QtWidgets.QGroupBox(self.centralwidget)
+        self.gridLayout_menu_images = QtWidgets.QGridLayout(
+            self.groupBox_menu_images)
+
+        self.label_input_image = QtWidgets.QLabel(self.groupBox_menu_images)
+        self.gridLayout_menu_images.addWidget(self.label_input_image, 0, 0, 1,
+                                              1)
+
+        self.label_output_image = QtWidgets.QLabel(self.groupBox_menu_images)
+        self.gridLayout_menu_images.addWidget(self.label_output_image, 0, 1, 1,
+                                              1)
+
+        self.UI_pixmap_input_image()
+        self.gridLayout_menu_images.addWidget(self.label_pixmap_input_image, 1,
+                                              0, 1, 1)
+
+        self.UI_pixmap_output_image()
+        self.gridLayout_menu_images.addWidget(self.label_pixmap_output_image,
+                                              1, 1, 1, 1)
+
+    def UI_group_color_input(self):
+        # TODO turn preview into scrollbar
+        self.groupBox_color_input = QtWidgets.QGroupBox(self.centralwidget)
+
+        # main vertical layout in group
+        self.verticalLayout_color_input = QtWidgets.QVBoxLayout(
+            self.groupBox_color_input)
+
+        # grid for checkbox and spinbox
+        self.gridLayout_color_input = QtWidgets.QGridLayout()
+        # add grid to main layout
+        self.verticalLayout_color_input.addLayout(self.gridLayout_color_input)
+
+        # checkbox
+        self.checkBox_input_colors = QtWidgets.QCheckBox(self.centralwidget)
+        self.checkBox_input_colors.setCursor(
+            QtGui.QCursor(QtCore.Qt.PointingHandCursor))
+        self.gridLayout_color_input.addWidget(self.checkBox_input_colors, 0, 0,
+                                              1, 1)
+        self.checkBox_input_colors.toggled.connect(self.load_color_from_cursor)
+
+        # spinbox
+        self.spinBox_input_colors = QtWidgets.QSpinBox(
+            self.groupBox_color_input)
+        self.spinBox_input_colors.setReadOnly(True)
+        self.spinBox_input_colors.setButtonSymbols(
+            QtWidgets.QAbstractSpinBox.NoButtons)
+        self.spinBox_input_colors.setMaximum(16581375)
+        self.gridLayout_color_input.addWidget(self.spinBox_input_colors, 0, 1,
+                                              1, 1)
+
+        # label
+        self.label_color_pallete = QtWidgets.QLabel(self.groupBox_color_input)
+        # self.gridLayout_color_input.addWidget(self.label_color_pallete, 1, 0,
+        #                                       1, 1)
+        self.verticalLayout_color_input.addWidget(self.label_color_pallete)
+
+        # self.gridWidget_color_input = QtWidgets.QWidget()
+
+        # self.gridWidget_color_input.setLayout(self.gridLayout_color_input)
+
+        # self.verticalLayout_color_input.addWidget(self.gridWidget_color_input)
+        # scrollArea for color preview
+        # self.scrollArea_color_input = QtWidgets.QScrollArea(
+        #     self.groupBox_color_input)
+        # self.scrollArea_color_input.setVerticalScrollBarPolicy(
+        #     QtCore.Qt.ScrollBarAlwaysOff)
+        # self.scrollArea_color_input.setHorizontalScrollBarPolicy(
+        #     QtCore.Qt.ScrollBarAlwaysOn)
+        # self.scrollArea_color_input.setWidgetResizable(True)
+        # self.scrollArea_color_input.setMinimumWidth(
+        #     self.DEFAULT_WINDOW_SIZE[0])
+        # self.scrollArea.setFrameShadow(QtWidgets.QFrame.Raised)
+
+        # self.gridLayout_color_input.addWidget(self.scrollArea_color_input, 0,
+        #                                       1, 1, 1)
+
+        self.horizontalLayout_colorboxes = QtWidgets.QHBoxLayout()
+
+        # holds the horizontal layout
+        # self.scrollWidget_color_input = QtWidgets.QWidget()
+
+        # self.scrollWidget_color_input.setLayout(
+        #     self.horizontalLayout_colorboxes)
+
+        # self.verticalLayout_color_input.addWidget(
+        #     self.scrollWidget_color_input)
+        # preview
+        self.verticalLayout_color_input.addLayout(
+            self.horizontalLayout_colorboxes)
+        # self.scrollArea.setWidget(self.scrollWidget_color_input)
+
+        return self.groupBox_color_input
+
+        # self.gridLayout_color_input.addwidget()
+
+        # self.scrollWidget_color_input.addLayout(
+        #     self.horizontalLayout_colorboxes)
+
+        # self.scrollArea_color_input.addWidget(self.scrollWidget_color_input)
+
+    def UI_group_output_settings(self):
+        self.groupBox_output_settings = QtWidgets.QGroupBox(self.centralwidget)
+
+        # main vertical layout in group
+        # houses label and grid
+        self.verticalLayout_output_settings = QtWidgets.QVBoxLayout(
+            self.groupBox_output_settings)
+
+        self.label_output_settings = QtWidgets.QLabel(self.centralwidget)
+        self.verticalLayout_output_settings.addWidget(
+            self.label_output_settings, )
+
+        # grid layout
+        self.gridLayout_output_settings = QtWidgets.QGridLayout()
+        self.verticalLayout_output_settings.addLayout(
+            self.gridLayout_output_settings)
+
+        # spinbox x
+        self.spinBox_output_resolution_x = QtWidgets.QSpinBox(
+            self.centralwidget)
+        # always expand
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Expanding,
+                                           QtWidgets.QSizePolicy.Fixed)
+        sizePolicy.setHorizontalStretch(0)
+        sizePolicy.setVerticalStretch(0)
+        sizePolicy.setHeightForWidth(
+            self.spinBox_output_resolution_x.sizePolicy().hasHeightForWidth())
+        self.spinBox_output_resolution_x.setSizePolicy(sizePolicy)
+        self.spinBox_output_resolution_x.setMinimum(1)
+        self.spinBox_output_resolution_x.setMaximum(600)
+        self.spinBox_output_resolution_x.setProperty("value",
+                                                     self.output_img_size[0])
+        self.spinBox_output_resolution_x.valueChanged.connect(
+            self.update_output_resolution)
+        self.gridLayout_output_settings.addWidget(
+            self.spinBox_output_resolution_x, 0, 0, 1, 1)
+
+        # label x
+        self.label_output_resolution_x = QtWidgets.QLabel(self.centralwidget)
+        self.gridLayout_output_settings.addWidget(
+            self.label_output_resolution_x, 0, 1, 1, 1)
+
+        # spinbox y
+        self.spinBox_output_resolution_y = QtWidgets.QSpinBox(
+            self.centralwidget)
+        # always expand
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Expanding,
+                                           QtWidgets.QSizePolicy.Fixed)
+        sizePolicy.setHorizontalStretch(0)
+        sizePolicy.setVerticalStretch(0)
+        sizePolicy.setHeightForWidth(
+            self.spinBox_output_resolution_y.sizePolicy().hasHeightForWidth())
+        self.spinBox_output_resolution_y.setSizePolicy(sizePolicy)
+        self.spinBox_output_resolution_y.setMinimum(1)
+        self.spinBox_output_resolution_y.setReadOnly(True)
+        self.spinBox_output_resolution_y.setButtonSymbols(
+            QtWidgets.QAbstractSpinBox.NoButtons)
+        self.spinBox_output_resolution_y.setMaximum(6000)
+        self.spinBox_output_resolution_y.setProperty("value",
+                                                     self.output_img_size[1])
+        self.gridLayout_output_settings.addWidget(
+            self.spinBox_output_resolution_y, 1, 0, 1, 1)
+
+        # label y
+        self.label_output_resolution_y = QtWidgets.QLabel(self.centralwidget)
+        self.gridLayout_output_settings.addWidget(
+            self.label_output_resolution_y, 1, 1, 1, 1)
+
+        # label dither
+        self.label_dither_method = QtWidgets.QLabel(self.centralwidget)
+        # self.gridLayout_output_settings.addWidget(self.label_dither_method, 2,
+        #                                           1, 1, 1)
+        self.verticalLayout_output_settings.addWidget(self.label_dither_method)
+
+        # combobox dither
+        self.comboBox_dither_method = QtWidgets.QComboBox(self.centralwidget)
+        self.comboBox_dither_method.addItems([
+            "Floyd-Steinberg", "Yliluoma", "Jarvis-Judice-Ninke", "Stucki",
+            "Burkes", "Sierra3", "Sierra2", "Sierra-2-4A", "Atkinson",
+            "Bayer matrix", "Cluster dot matrix"
+        ])
+        self.comboBox_dither_method.setCurrentText(self.DEFAULT_DITHER_METHOD)
+        self.comboBox_dither_method.activated[str].connect(
+            self.assign_dither_method)
+        # self.gridLayout_output_settings.addWidget(self.comboBox_dither_method,
+        #                                           2, 0, 1, 1)
+        self.verticalLayout_output_settings.addWidget(
+            self.comboBox_dither_method)
+
+        # label scale
+        self.label_scale_method = QtWidgets.QLabel(self.centralwidget)
+        # self.gridLayout_output_settings.addWidget(self.label_scale_method, 3,
+        #                                           1, 1, 1)
+        self.verticalLayout_output_settings.addWidget(self.label_scale_method)
+
+        # combobox scale
+        self.comboBox_scale_method = QtWidgets.QComboBox(self.centralwidget)
+        self.comboBox_scale_method.addItems(
+            ["NEAREST", "BOX", "BILINEAR", "HAMMING", "BICUBIC", "LANCZOS"])
+        self.comboBox_scale_method.setCurrentText(self.DEFAULT_SCALE_METHOD)
+        self.comboBox_scale_method.activated[str].connect(
+            self.assign_scale_method)
+        # self.gridLayout_output_settings.addWidget(self.comboBox_scale_method,
+        #                                           3, 0, 1, 1)
+        self.verticalLayout_output_settings.addWidget(
+            self.comboBox_scale_method)
+
+    def UI_group_preview_settings(self):
+        self.groupBox_preview_settings = QtWidgets.QGroupBox(
+            self.centralwidget)
+
+        # main vertical layout in group
+        # houses label and grid
+        self.verticalLayout_preview_settings = QtWidgets.QVBoxLayout(
+            self.groupBox_preview_settings)
+
+        # button generate output
         self.pushButton_generate_output = QtWidgets.QPushButton(
             self.centralwidget)
         sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Expanding,
@@ -668,9 +916,10 @@ class Ui_Image_drawer(QtWidgets.QMainWindow):
         self.pushButton_generate_output.setCursor(
             QtGui.QCursor(QtCore.Qt.PointingHandCursor))
         self.pushButton_generate_output.clicked.connect(self.floyd)
-        self.gridLayout_1.addWidget(self.pushButton_generate_output, 7, 0, 1,
-                                    1)
+        self.verticalLayout_preview_settings.addWidget(
+            self.pushButton_generate_output)
 
+        # checkbox display placing preview
         self.checkBox_display_image_placing = QtWidgets.QCheckBox(
             self.centralwidget)
         sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Expanding,
@@ -684,117 +933,40 @@ class Ui_Image_drawer(QtWidgets.QMainWindow):
             QtGui.QCursor(QtCore.Qt.PointingHandCursor))
         self.checkBox_display_image_placing.toggled.connect(
             self.show_hide_floating_placer)
-        self.gridLayout_1.addWidget(self.checkBox_display_image_placing, 7, 2,
-                                    1, 1)
+        self.verticalLayout_preview_settings.addWidget(
+            self.checkBox_display_image_placing)
 
-        self.UI_pixmap_output_image()
-        self.gridLayout_1.addWidget(self.label_pixmap_output_image, 4, 2, 1, 1)
-
-        self.label_input_image = QtWidgets.QLabel(self.centralwidget)
-        self.gridLayout_1.addWidget(self.label_input_image, 3, 0, 1, 1)
-
-        self.label_output_image = QtWidgets.QLabel(self.centralwidget)
-        self.gridLayout_1.addWidget(self.label_output_image, 3, 2, 1, 1)
-
-        self.UI_pixmap_input_image()
-        self.gridLayout_1.addWidget(self.label_pixmap_input_image, 4, 0, 1, 1)
-
-        self.line_3 = QtWidgets.QFrame(self.centralwidget)
-        self.line_3.setFrameShape(QtWidgets.QFrame.VLine)
-        self.line_3.setFrameShadow(QtWidgets.QFrame.Sunken)
-        self.gridLayout_1.addWidget(self.line_3, 7, 1, 1, 1)
-
-        self.line_4 = QtWidgets.QFrame(self.centralwidget)
-        self.line_4.setFrameShape(QtWidgets.QFrame.VLine)
-        self.line_4.setFrameShadow(QtWidgets.QFrame.Sunken)
-        self.gridLayout_1.addWidget(self.line_4, 8, 1, 1, 1)
-
-        self.pushButton_start_drawing = QtWidgets.QPushButton(
-            self.centralwidget)
-        self.pushButton_start_drawing.setEnabled(True)
-        self.pushButton_start_drawing.setCursor(
-            QtGui.QCursor(QtCore.Qt.PointingHandCursor))
-        self.pushButton_start_drawing.clicked.connect(self.draw_output)
-        self.gridLayout_1.addWidget(self.pushButton_start_drawing, 8, 0, 1, 1)
-
-        self.line_2 = QtWidgets.QFrame(self.centralwidget)
-        self.line_2.setFrameShape(QtWidgets.QFrame.VLine)
-        self.line_2.setFrameShadow(QtWidgets.QFrame.Sunken)
-        self.gridLayout_1.addWidget(self.line_2, 5, 1, 1, 1)
-
-        self.gridLayout_input_color_and_set_home = QtWidgets.QGridLayout()
-        self.checkBox_input_colors = QtWidgets.QCheckBox(self.centralwidget)
-        self.checkBox_input_colors.setCursor(
-            QtGui.QCursor(QtCore.Qt.PointingHandCursor))
-        self.gridLayout_input_color_and_set_home.addWidget(
-            self.checkBox_input_colors, 0, 0, 1, 1)
-        self.checkBox_input_colors.toggled.connect(self.load_pallete)
-
-        self.checkBox_set_home = QtWidgets.QRadioButton(self.centralwidget)
-        self.checkBox_set_home.setCursor(
-            QtGui.QCursor(QtCore.Qt.PointingHandCursor))
-        self.checkBox_set_home.toggled.connect(self.define_home)
-        self.gridLayout_input_color_and_set_home.addWidget(
-            self.checkBox_set_home, 0, 1, 1, 1)
-
-        self.spinBox_input_colors = QtWidgets.QSpinBox(self.centralwidget)
-        self.spinBox_input_colors.setReadOnly(True)
-        self.spinBox_input_colors.setButtonSymbols(
-            QtWidgets.QAbstractSpinBox.NoButtons)
-        self.spinBox_input_colors.setMaximum(16581375)
-        self.gridLayout_input_color_and_set_home.addWidget(
-            self.spinBox_input_colors, 1, 0, 1, 1)
-
-        self.progressBar_home_set = QtWidgets.QProgressBar(self.centralwidget)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Preferred,
-                                           QtWidgets.QSizePolicy.Fixed)
-        sizePolicy.setHorizontalStretch(0)
-        sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(
-            self.progressBar_home_set.sizePolicy().hasHeightForWidth())
-        self.progressBar_home_set.setSizePolicy(sizePolicy)
-        self.progressBar_home_set.setMaximum(1)
-        self.progressBar_home_set.setProperty("value", 0)
-        self.progressBar_home_set.setAlignment(QtCore.Qt.AlignCenter)
-        self.progressBar_home_set.setTextVisible(False)
-        self.gridLayout_input_color_and_set_home.addWidget(
-            self.progressBar_home_set, 1, 1, 1, 1)
-
-        self.gridLayout_1.addLayout(self.gridLayout_input_color_and_set_home,
-                                    8, 2, 1, 1)
-
-        self.verticalLayout_output_size = QtWidgets.QVBoxLayout()
-        self.line_5 = QtWidgets.QFrame(self.centralwidget)
-        self.line_5.setFrameShape(QtWidgets.QFrame.HLine)
-        self.line_5.setFrameShadow(QtWidgets.QFrame.Sunken)
-        self.verticalLayout_output_size.addWidget(self.line_5)
-
+        # grid for dials
         self.gridLayout_floating_preview = QtWidgets.QGridLayout()
 
+        # label ouput size
         self.label_output_size = QtWidgets.QLabel(self.centralwidget)
         self.label_output_size.setAlignment(QtCore.Qt.AlignCenter)
         # self.verticalLayout_output_size.addWidget(self.label_output_size)
         self.gridLayout_floating_preview.addWidget(self.label_output_size, 0,
                                                    0)
 
+        # dial ouput size
         self.dial_output_size = QtWidgets.QDial(self.centralwidget)
         self.dial_output_size.setCursor(
             QtGui.QCursor(QtCore.Qt.PointingHandCursor))
         self.dial_output_size.setMinimum(1)
         self.dial_output_size.setMaximum(801)
-        self.dial_output_size.setProperty("value", 99)
+        self.dial_output_size.setProperty("value", self.output_img_size[0])
         self.dial_output_size.setTracking(True)
         self.dial_output_size.setOrientation(QtCore.Qt.Horizontal)
         self.dial_output_size.valueChanged.connect(self.resize_floating_placer)
         # self.verticalLayout_output_size.addWidget(self.dial_output_size)
         self.gridLayout_floating_preview.addWidget(self.dial_output_size, 1, 0)
 
+        # label opacity
         self.label_output_opacity = QtWidgets.QLabel(self.centralwidget)
         # self.verticalLayout_output_size.addWidget(self.label_output_size)
         self.label_output_opacity.setAlignment(QtCore.Qt.AlignCenter)
         self.gridLayout_floating_preview.addWidget(self.label_output_opacity,
                                                    0, 1)
 
+        # dial output opacity
         self.dial_output_opacity = QtWidgets.QDial(self.centralwidget)
         self.dial_output_opacity.setCursor(
             QtGui.QCursor(QtCore.Qt.PointingHandCursor))
@@ -810,77 +982,116 @@ class Ui_Image_drawer(QtWidgets.QMainWindow):
         self.gridLayout_floating_preview.addWidget(self.dial_output_opacity, 1,
                                                    1)
 
-        self.verticalLayout_output_size.addLayout(
+        self.verticalLayout_preview_settings.addLayout(
             self.gridLayout_floating_preview)
 
-        self.line_6 = QtWidgets.QFrame(self.centralwidget)
-        self.line_6.setFrameShape(QtWidgets.QFrame.HLine)
-        self.line_6.setFrameShadow(QtWidgets.QFrame.Sunken)
-        self.verticalLayout_output_size.addWidget(self.line_6)
+    def UI_group_mouse_settings(self):
+        self.groupBox_mouse_settings = QtWidgets.QGroupBox(self.centralwidget)
+
+        # main vertical layout in group
+        # houses label and grid
+        self.verticalLayout_mouse_settings = QtWidgets.QVBoxLayout(
+            self.groupBox_mouse_settings)
+
+        # houses set home and set background color
+        self.horizontalLayout_mouse_settings = QtWidgets.QHBoxLayout()
+        self.verticalLayout_mouse_settings.addLayout(
+            self.horizontalLayout_mouse_settings)
+
+        # checkbox set home
+        self.checkBox_set_home = QtWidgets.QCheckBox()
+        self.checkBox_set_home.setCursor(
+            QtGui.QCursor(QtCore.Qt.PointingHandCursor))
+        self.checkBox_set_home.toggled.connect(self.set_home)
+        self.horizontalLayout_mouse_settings.addWidget(self.checkBox_set_home)
+
+        # indicator set home
+        self.progressBar_home_set = QtWidgets.QProgressBar()
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Preferred,
+                                           QtWidgets.QSizePolicy.Fixed)
+        sizePolicy.setHorizontalStretch(0)
+        sizePolicy.setVerticalStretch(0)
+        sizePolicy.setHeightForWidth(
+            self.progressBar_home_set.sizePolicy().hasHeightForWidth())
+        self.progressBar_home_set.setSizePolicy(sizePolicy)
+        self.progressBar_home_set.setMaximum(1)
+        self.progressBar_home_set.setProperty("value", 0)
+        self.progressBar_home_set.setAlignment(QtCore.Qt.AlignCenter)
+        self.progressBar_home_set.setTextVisible(False)
+        self.horizontalLayout_mouse_settings.addWidget(
+            self.progressBar_home_set)
+
+        # checkbox background color
+        self.checkBox_set_background_color = QtWidgets.QCheckBox()
+        self.checkBox_set_background_color.setCursor(
+            QtGui.QCursor(QtCore.Qt.PointingHandCursor))
+        self.checkBox_set_background_color.toggled.connect(
+            self.load_color_from_cursor)
+        self.horizontalLayout_mouse_settings.addWidget(
+            self.checkBox_set_background_color)
+
+        # colorbox background color
+        self.colorBox_background_color = QPaletteButton(self.background_color)
+        self.horizontalLayout_mouse_settings.addWidget(
+            self.colorBox_background_color)
+
+        # button start drawing
+        self.pushButton_start_drawing = QtWidgets.QPushButton(
+            self.centralwidget)
+        self.pushButton_start_drawing.setEnabled(True)
+        self.pushButton_start_drawing.setCursor(
+            QtGui.QCursor(QtCore.Qt.PointingHandCursor))
+        self.pushButton_start_drawing.clicked.connect(self.draw_output)
+        self.verticalLayout_mouse_settings.addWidget(
+            self.pushButton_start_drawing)
+
+        # add drawing speed
+        self.UI_vertical_layout_drawing_speed()
+        self.verticalLayout_mouse_settings.addLayout(
+            self.verticalLayout_drawing_speed)
+
+        # add waiting speed
+        self.UI_vertical_layout_waiting_speed()
+        self.verticalLayout_mouse_settings.addLayout(
+            self.verticalLayout_waiting_speed)
+
+    def UI_grid_layout_1(self):
+        self.gridLayout_1 = QtWidgets.QGridLayout()
+        self.gridLayout_1.setHorizontalSpacing(6)
+
+        self.line_3 = QtWidgets.QFrame(self.centralwidget)
+        self.line_3.setFrameShape(QtWidgets.QFrame.VLine)
+        self.line_3.setFrameShadow(QtWidgets.QFrame.Sunken)
+        self.gridLayout_1.addWidget(self.line_3, 7, 1, 1, 1)
+
+        self.line_4 = QtWidgets.QFrame(self.centralwidget)
+        self.line_4.setFrameShape(QtWidgets.QFrame.VLine)
+        self.line_4.setFrameShadow(QtWidgets.QFrame.Sunken)
+        self.gridLayout_1.addWidget(self.line_4, 8, 1, 1, 1)
+
+        self.line_2 = QtWidgets.QFrame(self.centralwidget)
+        self.line_2.setFrameShape(QtWidgets.QFrame.VLine)
+        self.line_2.setFrameShadow(QtWidgets.QFrame.Sunken)
+        self.gridLayout_1.addWidget(self.line_2, 5, 1, 1, 1)
+
+        # self.gridLayout_input_color_and_set_home = QtWidgets.QGridLayout()
+
+        # self.gridLayout_1.addLayout(self.gridLayout_input_color_and_set_home,
+        #                             8, 2, 1, 1)
+
+        self.verticalLayout_output_size = QtWidgets.QVBoxLayout()
+        self.line_5 = QtWidgets.QFrame(self.centralwidget)
+        self.line_5.setFrameShape(QtWidgets.QFrame.HLine)
+        self.line_5.setFrameShadow(QtWidgets.QFrame.Sunken)
+        self.verticalLayout_output_size.addWidget(self.line_5)
+
+        # self.line_6 = QtWidgets.QFrame(self.centralwidget)
+        # self.line_6.setFrameShape(QtWidgets.QFrame.HLine)
+        # self.line_6.setFrameShadow(QtWidgets.QFrame.Sunken)
+        # self.verticalLayout_output_size.addWidget(self.line_6)
 
         self.gridLayout_1.addLayout(self.verticalLayout_output_size, 5, 2, 1,
                                     1)
-        self.verticalLayout_output_resolution = QtWidgets.QVBoxLayout()
-        self.line = QtWidgets.QFrame(self.centralwidget)
-        self.line.setFrameShape(QtWidgets.QFrame.HLine)
-        self.line.setFrameShadow(QtWidgets.QFrame.Sunken)
-        self.verticalLayout_output_resolution.addWidget(self.line)
-
-        self.label_output_resolution = QtWidgets.QLabel(self.centralwidget)
-        self.verticalLayout_output_resolution.addWidget(
-            self.label_output_resolution)
-
-        self.label_output_resolution_x = QtWidgets.QLabel(self.centralwidget)
-        self.verticalLayout_output_resolution.addWidget(
-            self.label_output_resolution_x)
-
-        self.spinBox_output_resolution_x = QtWidgets.QSpinBox(
-            self.centralwidget)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Expanding,
-                                           QtWidgets.QSizePolicy.Fixed)
-        sizePolicy.setHorizontalStretch(0)
-        sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(
-            self.spinBox_output_resolution_x.sizePolicy().hasHeightForWidth())
-        self.spinBox_output_resolution_x.setSizePolicy(sizePolicy)
-        self.spinBox_output_resolution_x.setMinimum(1)
-        self.spinBox_output_resolution_x.setMaximum(600)
-        self.spinBox_output_resolution_x.setProperty("value",
-                                                     self.output_img_size[0])
-        self.spinBox_output_resolution_x.valueChanged.connect(
-            self.update_output_resolution)
-        self.verticalLayout_output_resolution.addWidget(
-            self.spinBox_output_resolution_x)
-
-        self.label_output_resolution_y = QtWidgets.QLabel(self.centralwidget)
-        self.verticalLayout_output_resolution.addWidget(
-            self.label_output_resolution_y)
-
-        self.spinBox_output_resolution_y = QtWidgets.QSpinBox(
-            self.centralwidget)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Expanding,
-                                           QtWidgets.QSizePolicy.Fixed)
-        sizePolicy.setHorizontalStretch(0)
-        sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(
-            self.spinBox_output_resolution_y.sizePolicy().hasHeightForWidth())
-        self.spinBox_output_resolution_y.setSizePolicy(sizePolicy)
-        self.spinBox_output_resolution_y.setMinimum(1)
-        self.spinBox_output_resolution_y.setReadOnly(True)
-        self.spinBox_output_resolution_y.setButtonSymbols(
-            QtWidgets.QAbstractSpinBox.NoButtons)
-        self.spinBox_output_resolution_y.setMaximum(6000)
-        self.spinBox_output_resolution_y.setProperty("value",
-                                                     self.output_img_size[1])
-        self.verticalLayout_output_resolution.addWidget(
-            self.spinBox_output_resolution_y)
-
-        self.line_7 = QtWidgets.QFrame(self.centralwidget)
-        self.line_7.setFrameShape(QtWidgets.QFrame.HLine)
-        self.line_7.setFrameShadow(QtWidgets.QFrame.Sunken)
-        self.verticalLayout_output_resolution.addWidget(self.line_7)
-        self.gridLayout_1.addLayout(self.verticalLayout_output_resolution, 5,
-                                    0, 1, 1)
 
     def UI_img_menu_size(self):
         self.gridLayout_menu_img_size = QtWidgets.QGridLayout()
@@ -898,43 +1109,19 @@ class Ui_Image_drawer(QtWidgets.QMainWindow):
             "value", self.img_menu_size)
         self.doubleSpinBox_afbeelding_menu_grootte.valueChanged.connect(
             self.update_menu_img)
+        # TODO relocate this
         self.gridLayout_menu_img_size.addWidget(
             self.doubleSpinBox_afbeelding_menu_grootte, 0, 0)
 
         self.label_afbeelding_menu_grootte = QtWidgets.QLabel(
             self.centralwidget)
+        # TODO relocate this
         self.gridLayout_menu_img_size.addWidget(
             self.label_afbeelding_menu_grootte, 0, 1)
 
-        self.comboBox_dither_method = QtWidgets.QComboBox(self.centralwidget)
-        self.comboBox_dither_method.addItems([
-            "Floyd-Steinberg", "Yliluoma", "Jarvis-Judice-Ninke", "Stucki",
-            "Burkes", "Sierra3", "Sierra2", "Sierra-2-4A", "Atkinson",
-            "Bayer matrix", "Cluster dot matrix"
-        ])
-        self.comboBox_dither_method.setCurrentText(self.DEFAULT_DITHER_METHOD)
-        self.comboBox_dither_method.activated[str].connect(
-            self.assign_dither_method)
-        self.gridLayout_menu_img_size.addWidget(self.comboBox_dither_method, 1,
-                                                0)
-
-        self.label_dither_method = QtWidgets.QLabel(self.centralwidget)
-        self.gridLayout_menu_img_size.addWidget(self.label_dither_method, 1, 1)
-
-        self.comboBox_scale_method = QtWidgets.QComboBox(self.centralwidget)
-        self.comboBox_scale_method.addItems(
-            ["NEAREST", "BOX", "BILINEAR", "HAMMING", "BICUBIC", "LANCZOS"])
-        self.comboBox_scale_method.setCurrentText(self.DEFAULT_SCALE_METHOD)
-        self.comboBox_scale_method.activated[str].connect(
-            self.assign_scale_method)
-        self.gridLayout_menu_img_size.addWidget(self.comboBox_scale_method, 2,
-                                                0)
-
-        self.label_scale_method = QtWidgets.QLabel(self.centralwidget)
-        self.gridLayout_menu_img_size.addWidget(self.label_scale_method, 2, 1)
-
     def UI_pixmap_input_image(self):
-        self.label_pixmap_input_image = QtWidgets.QLabel(self.centralwidget)
+        self.label_pixmap_input_image = QtWidgets.QLabel(
+            self.groupBox_menu_images)
         sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Expanding,
                                            QtWidgets.QSizePolicy.Preferred)
         sizePolicy.setHorizontalStretch(0)
@@ -947,7 +1134,8 @@ class Ui_Image_drawer(QtWidgets.QMainWindow):
         self.label_pixmap_input_image.setPixmap(self.input_img.qpix_scaled)
 
     def UI_pixmap_output_image(self):
-        self.label_pixmap_output_image = QtWidgets.QLabel(self.centralwidget)
+        self.label_pixmap_output_image = QtWidgets.QLabel(
+            self.groupBox_menu_images)
         sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Expanding,
                                            QtWidgets.QSizePolicy.Preferred)
         sizePolicy.setHorizontalStretch(0)
@@ -1133,14 +1321,9 @@ class Ui_Image_drawer(QtWidgets.QMainWindow):
 
         self.verticalLayout_waiting_speed.addLayout(self.horizontalLayout)
 
-    def UI_colorboxes(self):
-        self.horizontalLayout_colorboxes = QtWidgets.QHBoxLayout(
-            self.centralwidget)
-
     def add_colorbox(self, rgb_color):
         b = QPaletteButton(rgb_color)
         b.clicked.connect(self.destroy_preview_palette_box)
-        self.palette_preview_button_list.append(b)
         # self.drawn_palette_colors.append(hex_color)
         self.horizontalLayout_colorboxes.addWidget(b)
 
@@ -1148,16 +1331,9 @@ class Ui_Image_drawer(QtWidgets.QMainWindow):
         button = self.sender()
         # remove the color from the palette
         del self.color_pallette[button.rgb_color]
+        # delete button
         button.deleteLater()
-        self.palette_preview_button_list.remove(button)
         self.spinBox_input_colors.setValue(len(self.color_pallette.keys()))
-        # for button in self.palette_preview_button_list:
-        #     # if the button is pressed
-        #     if button.down():
-        #         # remove the color from the palette
-        #         del self.color_pallette[button.rgb_color]
-        #         button.deleteLater()
-        #         self.palette_preview_button_list.remove(button)
 
     def UI_menubar(self):
         self.menubar = QtWidgets.QMenuBar(Image_drawer)
@@ -1184,7 +1360,7 @@ class Ui_Image_drawer(QtWidgets.QMainWindow):
         self.pushButton_generate_output.setText(
             _translate("Image_drawer", "Generate output"))
         self.checkBox_display_image_placing.setText(
-            _translate("Image_drawer", "Display image placing preview"))
+            _translate("Image_drawer", "Display preview"))
         # self.label_pixmap_output_image.setText(
         #     _translate("Image_drawer", "Output image"))
         self.label_input_image.setText(_translate("Image_drawer", "Input"))
@@ -1198,17 +1374,29 @@ class Ui_Image_drawer(QtWidgets.QMainWindow):
             _translate("Image_drawer", "Image scaling method"))
         # self.label_pixmap_input_image.setText(
         #     _translate("Image_drawer", "Input image"))
+        self.groupBox_menu_images.setTitle(
+            _translate("Image_drawer", "In/out preview"))
+        self.groupBox_color_input.setTitle(
+            _translate("image_drawer", "Color input and preview"))
+        self.groupBox_output_settings.setTitle(
+            _translate("image_drawer", "Output settings"))
+        self.groupBox_preview_settings.setTitle(
+            _translate("image_drawer", "Placing preview settings"))
+        self.groupBox_mouse_settings.setTitle(
+            _translate("image_drawer", "Mouse drawing settings"))
         self.pushButton_start_drawing.setText(
             _translate("Image_drawer", "Start drawing"))
         self.checkBox_input_colors.setText(
             _translate("Image_drawer", "Input colors"))
         self.checkBox_set_home.setText(_translate("Image_drawer", "Set home"))
-        self.progressBar_home_set.setFormat(_translate("Image_drawer", "%p%"))
+        # self.progressBar_home_set.setFormat(_translate("Image_drawer", "%p%"))
+        self.checkBox_set_background_color.setText(
+            _translate("Image_drawer", "Set background color"))
         self.label_output_size.setText(
             _translate("Image_drawer", "Preview size"))
         self.label_output_opacity.setText(
             _translate("Image_drawer", "Preview opacity"))
-        self.label_output_resolution.setText(
+        self.label_output_settings.setText(
             _translate("Image_drawer", "Output resolution"))
         self.label_output_resolution_x.setText(
             _translate("Image_drawer", "x (px)"))
@@ -1257,7 +1445,9 @@ class Ui_Image_drawer(QtWidgets.QMainWindow):
                                                      self.output_img_size[1])
 
     def update_progressBar_main(self, percentage: int):
-        self.progressBar_main.setProperty("value", int(percentage))
+        # TODO
+        pass
+        # self.progressBar_main.setProperty("value", int(percentage))
 
     def update_home_pos(self, pos):
         self.progressBar_home_set.setProperty("value", 1)
@@ -1336,15 +1526,16 @@ class Ui_Image_drawer(QtWidgets.QMainWindow):
     def assign_scale_method(self):
         self.scale_method = self.comboBox_scale_method.currentText()
 
-    def load_pallete(self):
-        if self.checkBox_input_colors.isChecked():
+    def load_color_from_cursor(self):
+        if self.checkBox_input_colors.isChecked(
+        ) or self.checkBox_set_background_color.isChecked():
             # Start Button action:
             self.pallete_thread.start()
         else:
             self.pallete_thread.keep_looking = False
             # self.update_colorboxes()
 
-    def define_home(self):
+    def set_home(self):
         if self.checkBox_set_home.isChecked():
             # Start Button action:
             self.home_thread.start()
@@ -1352,16 +1543,22 @@ class Ui_Image_drawer(QtWidgets.QMainWindow):
             self.home_thread.keep_looking = False
 
     def add_color_to_pallete(self, data: tuple):
-        color, position = data
-        if color not in self.color_pallette:
-            self.add_colorbox(color)
-            # self.spinBox_input_colors.setValue(
-            #     self.spinBox_input_colors.value() + 1)
-            # self.spinBox_input_colors.setValue(len(self.color_pallette.keys())+1)
-        self.color_pallette[color] = position
-        self.spinBox_input_colors.setValue(len(self.color_pallette.keys()))
-        print("toegevoegd:", data)
-        # print(self.color_pallette)
+        if self.checkBox_input_colors.isChecked(
+        ) or self.checkBox_set_background_color.isChecked():
+            color, position = data
+            if self.checkBox_input_colors.isChecked():
+                if color not in self.color_pallette:
+                    self.add_colorbox(color)
+                self.color_pallette[color] = position
+                self.spinBox_input_colors.setValue(
+                    len(self.color_pallette.keys()))
+                print("toegevoegd:", data)
+
+            if self.checkBox_set_background_color.isChecked():
+                self.background_color = color
+                print("background is now:", color)
+                self.colorBox_background_color.update_color(
+                    self.background_color)
 
     def empty_palette_error(self):
         # error_dialog = QtWidgets.QErrorMessage(self)
@@ -1382,7 +1579,7 @@ class Ui_Image_drawer(QtWidgets.QMainWindow):
             return
 
         self.checkBox_input_colors.setChecked(QtCore.Qt.Unchecked)
-        self.load_pallete()
+        self.load_color_from_cursor()
 
         # print(self.color_pallette)
         self.floyd_thread.color_pallette_dict = self.color_pallette
