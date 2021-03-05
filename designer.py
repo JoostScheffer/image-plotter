@@ -63,11 +63,12 @@ class img_file():
     filename: str
     # max size is actualy the width of the image but i did not update this yet
     max_size: int
-    qpix: QtGui.QPixmap = field(init=False, default=None)
-    qpix_scaled: QtGui.QPixmap = field(init=False, default=None)
-    aspect_ratio: float = field(init=False, default=None)
-    width: int = field(init=False, default=None)
-    height: int = field(init=False, default=None)
+
+    # qpix: QtGui.QPixmap = field(init=False, default=QtGui.QPixmap)
+    # qpix_scaled: QtGui.QPixmap = field(init=False, default=None)
+    # aspect_ratio: float = field(init=False, default=None)
+    # width: int = field(init=False, default=None)
+    # height: int = field(init=False, default=None)
 
     def __post_init__(self):
         self.qpix = QtGui.QPixmap(self.filename)
@@ -126,7 +127,8 @@ class FloatingPreview(QtWidgets.QWidget):
         sizePolicy.setVerticalStretch(0)
 
         self.m_original_input_image = input_img
-        self.m_label = QtWidgets.QLabel(alignment=QtCore.Qt.AlignCenter)
+        # self.m_label = QtWidgets.QLabel(alignment=QtCore.Qt.AlignCenter)
+        self.m_label = QtWidgets.QLabel()
         self.m_label.setPixmap(self.m_original_input_image.qpix)
         self.dragPos = QtCore.QPoint()
         self.m_label.mouseMoveEvent = self.mouseMoveEvent
