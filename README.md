@@ -1,6 +1,6 @@
 # image-plotter
 *MacOS and Linux not yet supported because of mouse controll constraints*\
- Is able to plot images using a qt desktop application and your mouse
+ Plot images using a qt desktop application and your mouse
  ## build
  ### install packages with pip
  use
