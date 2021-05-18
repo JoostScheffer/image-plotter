@@ -509,7 +509,8 @@ class Ui_Image_drawer(QtWidgets.QMainWindow):
 
         # drawing speeds in seconds
         self.AVAILABLE_DRAWING_SPEEDS = [
-            0.0001,
+            0.1,
+            # 0.0001,
             0.000005,
             0.000001,
             0.0000005,
