@@ -1,17 +1,18 @@
 # -*- coding: utf-8 -*-
 
-from PyQt5 import QtCore, QtGui, QtWidgets
-from dataclasses import dataclass, field
-from typing import Tuple, Dict
+import os
+from dataclasses import dataclass
+from operator import itemgetter
 from time import sleep
+from typing import Tuple
+
+import hitherdither
 import keyboard
 import mouse
-from PIL import Image
-import pyscreenshot as ImageGrab
-from operator import itemgetter
 import numpy as np
-import hitherdither
-import os
+import pyscreenshot as ImageGrab
+from PIL import Image
+from PyQt5 import QtCore, QtGui, QtWidgets
 
 # TODO check of afbeelding bestaat
 # TODO maak color pallete preview of een grid of geef het een scrollbar
@@ -122,7 +123,9 @@ class FloatingPreview(QtWidgets.QWidget):
             "}"
         )
         self.setAttribute(QtCore.Qt.WA_TranslucentBackground, True)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding
+        )
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
 
@@ -291,7 +294,9 @@ class DrawingWorker(QtCore.QThread):
             for j in self.que[i]:
                 # update progrssbar
                 if not colors_placed % 40:
-                    curr_precent = int(colors_placed * 100 / (self.img.shape[1] * self.img.shape[0]))
+                    curr_precent = int(
+                        colors_placed * 100 / (self.img.shape[1] * self.img.shape[0])
+                    )
                     if curr_precent > prev_percent:
                         prev_percent = curr_precent
                         # TODO add percentage bars
@@ -304,8 +309,10 @@ class DrawingWorker(QtCore.QThread):
 
                 y, x = j
                 mouse.move(
-                    self.drawing_domain[0] + x * (self.drawing_domain[2] - self.drawing_domain[0]) / self.img.shape[0],
-                    self.drawing_domain[1] + y * (self.drawing_domain[3] - self.drawing_domain[1]) / self.img.shape[1],
+                    self.drawing_domain[0]
+                    + x * (self.drawing_domain[2] - self.drawing_domain[0]) / self.img.shape[0],
+                    self.drawing_domain[1]
+                    + y * (self.drawing_domain[3] - self.drawing_domain[1]) / self.img.shape[1],
                 )
                 # mouse.move(200 + x * 4, 400 + y * 4)
                 # sleep(0.0000005)
@@ -371,7 +378,9 @@ class FloydWorker(QtCore.QThread):
         self.hither_palette = hitherdither.palette.Palette(list(self.color_pallette_dict.keys()))
         # print(list(self.color_pallette_dict.keys()))
 
-        img = Image.open(self.image_name).resize(self.size, self.resize_resample[self.resize_method])
+        img = Image.open(self.image_name).resize(
+            self.size, self.resize_resample[self.resize_method]
+        )
         # img.show()
 
         # if the image is a png the transparancy needs to be removed
@@ -391,9 +400,13 @@ class FloydWorker(QtCore.QThread):
                 img, self.hither_palette, self.dither_method
             )
         elif self.dither_method == "Yliluoma":
-            img_dithered = self.ordered_dither_functions[self.dither_method](img, self.hither_palette)
+            img_dithered = self.ordered_dither_functions[self.dither_method](
+                img, self.hither_palette
+            )
         else:
-            img_dithered = self.ordered_dither_functions[self.dither_method](img, self.hither_palette, thresholds=1)
+            img_dithered = self.ordered_dither_functions[self.dither_method](
+                img, self.hither_palette, thresholds=1
+            )
 
         # img_dithered.show()
 
@@ -569,14 +582,18 @@ class Ui_Image_drawer(QtWidgets.QMainWindow):
 
     def UI_window(self, Image_drawer):
         Image_drawer.resize(*self.DEFAULT_WINDOW_SIZE)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding
+        )
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(Image_drawer.sizePolicy().hasHeightForWidth())
         Image_drawer.setSizePolicy(sizePolicy)
         self.centralwidget = QtWidgets.QWidget(Image_drawer)
 
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Maximum, QtWidgets.QSizePolicy.Preferred)
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Maximum, QtWidgets.QSizePolicy.Preferred
+        )
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(self.centralwidget.sizePolicy().hasHeightForWidth())
@@ -798,10 +815,14 @@ class Ui_Image_drawer(QtWidgets.QMainWindow):
         # spinbox x
         self.spinBox_output_resolution_x = QtWidgets.QSpinBox(self.centralwidget)
         # always expand
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed
+        )
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(self.spinBox_output_resolution_x.sizePolicy().hasHeightForWidth())
+        sizePolicy.setHeightForWidth(
+            self.spinBox_output_resolution_x.sizePolicy().hasHeightForWidth()
+        )
         self.spinBox_output_resolution_x.setSizePolicy(sizePolicy)
         self.spinBox_output_resolution_x.setMinimum(1)
         self.spinBox_output_resolution_x.setMaximum(600)
@@ -816,10 +837,14 @@ class Ui_Image_drawer(QtWidgets.QMainWindow):
         # spinbox y
         self.spinBox_output_resolution_y = QtWidgets.QSpinBox(self.centralwidget)
         # always expand
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed
+        )
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(self.spinBox_output_resolution_y.sizePolicy().hasHeightForWidth())
+        sizePolicy.setHeightForWidth(
+            self.spinBox_output_resolution_y.sizePolicy().hasHeightForWidth()
+        )
         self.spinBox_output_resolution_y.setSizePolicy(sizePolicy)
         self.spinBox_output_resolution_y.setMinimum(1)
         self.spinBox_output_resolution_y.setReadOnly(True)
@@ -869,7 +894,9 @@ class Ui_Image_drawer(QtWidgets.QMainWindow):
 
         # combobox scale
         self.comboBox_scale_method = QtWidgets.QComboBox(self.centralwidget)
-        self.comboBox_scale_method.addItems(["NEAREST", "BOX", "BILINEAR", "HAMMING", "BICUBIC", "LANCZOS"])
+        self.comboBox_scale_method.addItems(
+            ["NEAREST", "BOX", "BILINEAR", "HAMMING", "BICUBIC", "LANCZOS"]
+        )
         self.comboBox_scale_method.setCurrentText(self.DEFAULT_SCALE_METHOD)
         self.comboBox_scale_method.activated[str].connect(self.assign_scale_method)
         # self.gridLayout_output_settings.addWidget(self.comboBox_scale_method,
@@ -885,10 +912,14 @@ class Ui_Image_drawer(QtWidgets.QMainWindow):
 
         # button generate output
         self.pushButton_generate_output = QtWidgets.QPushButton(self.centralwidget)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed
+        )
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(self.pushButton_generate_output.sizePolicy().hasHeightForWidth())
+        sizePolicy.setHeightForWidth(
+            self.pushButton_generate_output.sizePolicy().hasHeightForWidth()
+        )
         self.pushButton_generate_output.setSizePolicy(sizePolicy)
         self.pushButton_generate_output.setCursor(QtGui.QCursor(QtCore.Qt.PointingHandCursor))
         self.pushButton_generate_output.clicked.connect(self.floyd)
@@ -896,10 +927,14 @@ class Ui_Image_drawer(QtWidgets.QMainWindow):
 
         # checkbox display placing preview
         self.checkBox_display_image_placing = QtWidgets.QCheckBox(self.centralwidget)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed
+        )
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(self.checkBox_display_image_placing.sizePolicy().hasHeightForWidth())
+        sizePolicy.setHeightForWidth(
+            self.checkBox_display_image_placing.sizePolicy().hasHeightForWidth()
+        )
         self.checkBox_display_image_placing.setSizePolicy(sizePolicy)
         self.checkBox_display_image_placing.setCursor(QtGui.QCursor(QtCore.Qt.PointingHandCursor))
         self.checkBox_display_image_placing.toggled.connect(self.show_hide_floating_placer)
@@ -965,7 +1000,9 @@ class Ui_Image_drawer(QtWidgets.QMainWindow):
 
         # indicator set home
         self.progressBar_home_set = QtWidgets.QProgressBar()
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Fixed)
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Fixed
+        )
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(self.progressBar_home_set.sizePolicy().hasHeightForWidth())
@@ -1060,7 +1097,9 @@ class Ui_Image_drawer(QtWidgets.QMainWindow):
 
     def UI_pixmap_input_image(self):
         self.label_pixmap_input_image = QtWidgets.QLabel(self.groupBox_menu_images)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Preferred)
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Preferred
+        )
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(self.label_pixmap_input_image.sizePolicy().hasHeightForWidth())
@@ -1071,10 +1110,14 @@ class Ui_Image_drawer(QtWidgets.QMainWindow):
 
     def UI_pixmap_output_image(self):
         self.label_pixmap_output_image = QtWidgets.QLabel(self.groupBox_menu_images)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Preferred)
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Preferred
+        )
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(self.label_pixmap_output_image.sizePolicy().hasHeightForWidth())
+        sizePolicy.setHeightForWidth(
+            self.label_pixmap_output_image.sizePolicy().hasHeightForWidth()
+        )
         self.label_pixmap_output_image.setSizePolicy(sizePolicy)
         self.label_pixmap_output_image.setAlignment(QtCore.Qt.AlignCenter)
         self.label_pixmap_output_image.setFrameShape(QtWidgets.QFrame.Box)
@@ -1100,7 +1143,9 @@ class Ui_Image_drawer(QtWidgets.QMainWindow):
         self.verticalLayout_drawing_speed.addWidget(self.line_drawing_speed_3)
 
         self.label_drawing_speed_0 = QtWidgets.QLabel(self.centralwidget)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Preferred)
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Preferred
+        )
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(self.label_drawing_speed_0.sizePolicy().hasHeightForWidth())
@@ -1123,28 +1168,38 @@ class Ui_Image_drawer(QtWidgets.QMainWindow):
 
         self.horizontalLayout_4 = QtWidgets.QHBoxLayout()
         self.label_drawing_speed_1 = QtWidgets.QLabel(self.centralwidget)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Preferred)
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Preferred
+        )
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(self.label_drawing_speed_1.sizePolicy().hasHeightForWidth())
         self.label_drawing_speed_1.setSizePolicy(sizePolicy)
         self.label_drawing_speed_1.setFrameShape(QtWidgets.QFrame.NoFrame)
         self.label_drawing_speed_1.setTextFormat(QtCore.Qt.AutoText)
-        self.label_drawing_speed_1.setAlignment(QtCore.Qt.AlignLeading | QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter)
+        self.label_drawing_speed_1.setAlignment(
+            QtCore.Qt.AlignLeading | QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter
+        )
         self.label_drawing_speed_1.setTextInteractionFlags(QtCore.Qt.NoTextInteraction)
         self.horizontalLayout_4.addWidget(self.label_drawing_speed_1)
 
-        spacerItem = QtWidgets.QSpacerItem(33, 20, QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Minimum)
+        spacerItem = QtWidgets.QSpacerItem(
+            33, 20, QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Minimum
+        )
         self.horizontalLayout_4.addItem(spacerItem)
         self.line_drawing_speed_1 = QtWidgets.QFrame(self.centralwidget)
         self.line_drawing_speed_1.setFrameShape(QtWidgets.QFrame.VLine)
         self.line_drawing_speed_1.setFrameShadow(QtWidgets.QFrame.Sunken)
         self.horizontalLayout_4.addWidget(self.line_drawing_speed_1)
 
-        spacerItem1 = QtWidgets.QSpacerItem(40, 20, QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Minimum)
+        spacerItem1 = QtWidgets.QSpacerItem(
+            40, 20, QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Minimum
+        )
         self.horizontalLayout_4.addItem(spacerItem1)
         self.label_drawing_speed_2 = QtWidgets.QLabel(self.centralwidget)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Preferred)
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Preferred
+        )
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(self.label_drawing_speed_2.sizePolicy().hasHeightForWidth())
@@ -1152,22 +1207,30 @@ class Ui_Image_drawer(QtWidgets.QMainWindow):
         self.label_drawing_speed_2.setAlignment(QtCore.Qt.AlignCenter)
         self.horizontalLayout_4.addWidget(self.label_drawing_speed_2)
 
-        spacerItem2 = QtWidgets.QSpacerItem(55, 20, QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Minimum)
+        spacerItem2 = QtWidgets.QSpacerItem(
+            55, 20, QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Minimum
+        )
         self.horizontalLayout_4.addItem(spacerItem2)
         self.line_drawing_speed_2 = QtWidgets.QFrame(self.centralwidget)
         self.line_drawing_speed_2.setFrameShape(QtWidgets.QFrame.VLine)
         self.line_drawing_speed_2.setFrameShadow(QtWidgets.QFrame.Sunken)
         self.horizontalLayout_4.addWidget(self.line_drawing_speed_2)
 
-        spacerItem3 = QtWidgets.QSpacerItem(40, 20, QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Minimum)
+        spacerItem3 = QtWidgets.QSpacerItem(
+            40, 20, QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Minimum
+        )
         self.horizontalLayout_4.addItem(spacerItem3)
         self.label_drawing_speed_3 = QtWidgets.QLabel(self.centralwidget)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Preferred)
+        sizePolicy = QtWidgets.QSizePolicy(
+            QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Preferred
+        )
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(self.label_drawing_speed_3.sizePolicy().hasHeightForWidth())
         self.label_drawing_speed_3.setSizePolicy(sizePolicy)
-        self.label_drawing_speed_3.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignTrailing | QtCore.Qt.AlignVCenter)
+        self.label_drawing_speed_3.setAlignment(
+            QtCore.Qt.AlignRight | QtCore.Qt.AlignTrailing | QtCore.Qt.AlignVCenter
+        )
         self.horizontalLayout_4.addWidget(self.label_drawing_speed_3)
 
         self.verticalLayout_drawing_speed.addLayout(self.horizontalLayout_4)
@@ -1206,10 +1269,14 @@ class Ui_Image_drawer(QtWidgets.QMainWindow):
         # self.line_11.setFrameShadow(QtWidgets.QFrame.Sunken)
         # self.horizontalLayout.addWidget(self.line_11)
 
-        spacerItem5 = QtWidgets.QSpacerItem(40, 20, QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum)
+        spacerItem5 = QtWidgets.QSpacerItem(
+            40, 20, QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum
+        )
         self.horizontalLayout.addItem(spacerItem5)
         self.label_waiting_speed_2 = QtWidgets.QLabel(self.centralwidget)
-        self.label_waiting_speed_2.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignTrailing | QtCore.Qt.AlignVCenter)
+        self.label_waiting_speed_2.setAlignment(
+            QtCore.Qt.AlignRight | QtCore.Qt.AlignTrailing | QtCore.Qt.AlignVCenter
+        )
         self.horizontalLayout.addWidget(self.label_waiting_speed_2)
 
         self.verticalLayout_waiting_speed.addLayout(self.horizontalLayout)
@@ -1255,7 +1322,9 @@ class Ui_Image_drawer(QtWidgets.QMainWindow):
         #     _translate("Image_drawer", "Output image"))
         self.label_input_image.setText(_translate("Image_drawer", "Input"))
         self.label_output_image.setText(_translate("Image_drawer", "Output (approx)"))
-        self.label_afbeelding_menu_grootte.setText(_translate("Image_drawer", "Menu image size (px)"))
+        self.label_afbeelding_menu_grootte.setText(
+            _translate("Image_drawer", "Menu image size (px)")
+        )
         self.label_dither_method.setText(_translate("Image_drawer", "Color quantization method"))
         self.label_scale_method.setText(_translate("Image_drawer", "Image scaling method"))
         # self.label_pixmap_input_image.setText(
@@ -1263,13 +1332,17 @@ class Ui_Image_drawer(QtWidgets.QMainWindow):
         self.groupBox_menu_images.setTitle(_translate("Image_drawer", "In/out preview"))
         self.groupBox_color_input.setTitle(_translate("image_drawer", "Color input and preview"))
         self.groupBox_output_settings.setTitle(_translate("image_drawer", "Output settings"))
-        self.groupBox_preview_settings.setTitle(_translate("image_drawer", "Placing preview settings"))
+        self.groupBox_preview_settings.setTitle(
+            _translate("image_drawer", "Placing preview settings")
+        )
         self.groupBox_mouse_settings.setTitle(_translate("image_drawer", "Mouse drawing settings"))
         self.pushButton_start_drawing.setText(_translate("Image_drawer", "Start drawing"))
         self.checkBox_input_colors.setText(_translate("Image_drawer", "Input colors"))
         self.checkBox_set_home.setText(_translate("Image_drawer", "Set home"))
         # self.progressBar_home_set.setFormat(_translate("Image_drawer", "%p%"))
-        self.checkBox_set_background_color.setText(_translate("Image_drawer", "Set background color"))
+        self.checkBox_set_background_color.setText(
+            _translate("Image_drawer", "Set background color")
+        )
         self.label_output_size.setText(_translate("Image_drawer", "Preview size"))
         self.label_output_opacity.setText(_translate("Image_drawer", "Preview opacity"))
         self.label_output_settings.setText(_translate("Image_drawer", "Output resolution"))
@@ -1319,10 +1392,14 @@ class Ui_Image_drawer(QtWidgets.QMainWindow):
         self.home = pos
 
     def update_drawing_speed(self):
-        self.drawing_speed = self.AVAILABLE_DRAWING_SPEEDS[self.horizontalSlider_drawing_speed.value()]
+        self.drawing_speed = self.AVAILABLE_DRAWING_SPEEDS[
+            self.horizontalSlider_drawing_speed.value()
+        ]
 
     def update_waiting_speed(self):
-        self.waiting_speed = self.AVAILABLE_WAITING_SPEEDS[self.horizontalSlider_waiting_speed.value()]
+        self.waiting_speed = self.AVAILABLE_WAITING_SPEEDS[
+            self.horizontalSlider_waiting_speed.value()
+        ]
 
     def show_hide_floating_placer(self):
         if self.checkBox_display_image_placing.isChecked():
@@ -1351,12 +1428,16 @@ class Ui_Image_drawer(QtWidgets.QMainWindow):
         try:
             if self.input_fileName[-3:] == "svg":
                 print("Ik heb geen implementatie voor svg. ")
-                QtWidgets.QMessageBox.about(self, "Helaas", "Ik heb nog geen implementatie voor svg bestanden")
+                QtWidgets.QMessageBox.about(
+                    self, "Helaas", "Ik heb nog geen implementatie voor svg bestanden"
+                )
                 return
         except AttributeError as error:
             tmp = str(error)
             print("het ging fout")
-            QtWidgets.QMessageBox.about(self, tmp, "Je afbeelding is waarschijnlijk niet mooi genoeg")
+            QtWidgets.QMessageBox.about(
+                self, tmp, "Je afbeelding is waarschijnlijk niet mooi genoeg"
+            )
 
         # if no file was selected return
         if not self.input_fileName:
